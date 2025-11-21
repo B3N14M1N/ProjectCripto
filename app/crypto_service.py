@@ -36,14 +36,22 @@ class SecureMessagingService(ICryptoService):
         3. Encrypt AES Key with RSA.
         """
         # 1. Generate AES Key (16 bytes for AES-128, 32 for AES-256)
-        aes_key = get_random_bytes(32) # AES-256
+        # We use AES-256 for strong symmetric encryption.
+        aes_key = get_random_bytes(32) 
         
         # 2. Encrypt Message with AES (CBC mode)
+        # CBC (Cipher Block Chaining) needs an IV (Initialization Vector) to ensure uniqueness.
+        # Even if we encrypt the same message twice, the random IV makes the output different.
         cipher_aes = AES.new(aes_key, AES.MODE_CBC)
         iv = cipher_aes.iv
+        
+        # Pad the message: AES works on fixed-size blocks (16 bytes). 
+        # If the message isn't a multiple of 16 bytes, we add padding.
         encrypted_message_bytes = cipher_aes.encrypt(pad(message.encode('utf-8'), AES.block_size))
         
         # 3. Encrypt AES Key with RSA
+        # We use the recipient's Public Key to lock the AES key.
+        # PKCS1_OAEP is a padding scheme for RSA that adds randomness and security.
         recipient_key = RSA.import_key(public_key_pem)
         cipher_rsa = PKCS1_OAEP.new(recipient_key)
         encrypted_aes_key_bytes = cipher_rsa.encrypt(aes_key)
@@ -63,18 +71,21 @@ class SecureMessagingService(ICryptoService):
         2. Decrypt Message with AES.
         """
         try:
-            # Decode inputs
+            # Decode inputs from Base64 back to raw bytes
             encrypted_aes_key_bytes = base64.b64decode(encrypted_key_b64)
             encrypted_message_bytes = base64.b64decode(encrypted_message_b64)
             iv = base64.b64decode(iv_b64)
             
             # 1. Decrypt AES Key with RSA
+            # We use our Private Key to unlock the AES key.
             private_key = RSA.import_key(private_key_pem)
             cipher_rsa = PKCS1_OAEP.new(private_key)
             aes_key = cipher_rsa.decrypt(encrypted_aes_key_bytes)
             
             # 2. Decrypt Message with AES
+            # We recreate the AES cipher using the decrypted key and the original IV.
             cipher_aes = AES.new(aes_key, AES.MODE_CBC, iv)
+            # We decrypt and then remove the padding we added earlier.
             decrypted_message_bytes = unpad(cipher_aes.decrypt(encrypted_message_bytes), AES.block_size)
             
             return {
