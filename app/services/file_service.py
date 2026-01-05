@@ -28,8 +28,8 @@ class FileService:
     Cheia AES este criptata cu RSA pentru fiecare destinatar.
     """
     
-    # Extensii permise pentru upload
-    ALLOWED_EXTENSIONS = {'txt', 'pdf', 'png', 'jpg', 'jpeg', 'gif', 'doc', 'docx', 'zip'}
+    # Extensii comune (pentru referinta - nu mai restrictionam)
+    COMMON_EXTENSIONS = {'txt', 'pdf', 'png', 'jpg', 'jpeg', 'gif', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'zip', 'rar', 'log', 'csv', 'json', 'xml', 'webp', 'svg', 'bmp'}
     
     # Tipuri MIME pentru imagini (afisate inline)
     IMAGE_MIME_TYPES = {'image/png', 'image/jpeg', 'image/gif', 'image/webp'}
@@ -48,33 +48,52 @@ class FileService:
         # Cream directorul daca nu exista
         os.makedirs(self.upload_folder, exist_ok=True)
     
-    def allowed_file(self, filename):
+    def is_common_extension(self, filename):
         """
-        Verifica daca extensia fisierului este permisa.
+        Verifica daca extensia fisierului este una comuna.
+        Nu restrictioneaza upload-ul, doar pentru referinta.
         
         Args:
             filename: Numele fisierului
             
         Returns:
-            bool: True daca extensia e permisa
+            bool: True daca extensia e comuna
         """
-        return '.' in filename and \
-               filename.rsplit('.', 1)[1].lower() in self.ALLOWED_EXTENSIONS
+        if '.' not in filename:
+            return True
+        ext = filename.rsplit('.', 1)[1].lower()
+        return ext in self.COMMON_EXTENSIONS
     
     def get_file_type(self, filename):
         """
-        Determina tipul fisierului (image sau file).
+        Determina tipul fisierului bazat pe MIME type.
         
         Args:
             filename: Numele fisierului
             
         Returns:
-            str: 'image' sau 'file'
+            str: 'image', 'document', 'video', 'audio', sau 'other'
         """
         mime_type, _ = mimetypes.guess_type(filename)
-        if mime_type in self.IMAGE_MIME_TYPES:
+        if not mime_type:
+            return 'other'
+        
+        if mime_type.startswith('image/'):
             return 'image'
-        return 'file'
+        elif mime_type.startswith('video/'):
+            return 'video'
+        elif mime_type.startswith('audio/'):
+            return 'audio'
+        elif mime_type in ['application/pdf', 'application/msword', 
+                          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                          'application/vnd.ms-powerpoint',
+                          'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+                          'application/vnd.ms-excel',
+                          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                          'text/plain']:
+            return 'document'
+        else:
+            return 'other'
     
     def upload_file(self, file, recipient_public_keys):
         """
@@ -103,13 +122,10 @@ class FileService:
         
         filename = secure_filename(file.filename)
         if not filename:
-            return {'success': False, 'error': 'Nume fisier invalid'}
-        
-        if not self.allowed_file(filename):
-            return {
-                'success': False, 
-                'error': f'Tip de fisier nepermis. Extensii permise: {", ".join(self.ALLOWED_EXTENSIONS)}'
-            }
+            # Daca secure_filename returneaza empty, pastram numele original dar sanitizat
+            filename = file.filename.replace('/', '_').replace('\\', '_')
+            if not filename:
+                return {'success': False, 'error': 'Nume fisier invalid'}
         
         try:
             # Citim continutul fisierului
@@ -146,14 +162,26 @@ class FileService:
                     'mime_type': mime_type or 'application/octet-stream',
                     'type': file_type
                 },
-                'encrypted_data': {
-                    'iv': encrypted_data['iv'],
-                    'encrypted_aes_keys': encrypted_data['encrypted_aes_keys']
-                }
+                'temp_id': unique_id,
+                'iv': encrypted_data['iv'],
+                'encrypted_aes_keys': encrypted_data['encrypted_aes_keys']
             }
             
         except Exception as e:
             return {'success': False, 'error': f'Eroare la upload: {str(e)}'}
+    
+    def delete_temp_file(self, temp_id):
+        """
+        Sterge un fisier temporar uploadat.
+        
+        Args:
+            temp_id: ID-ul temporar al fisierului
+            
+        Returns:
+            dict: {success: bool}
+        """
+        encrypted_filename = f"{temp_id}.enc"
+        return {'success': self.delete_file(encrypted_filename)}
     
     def download_file(self, file_path, encrypted_aes_key, iv, private_key_pem):
         """

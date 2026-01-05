@@ -36,7 +36,7 @@ class Config:
     MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # Limita 16MB pentru upload
     
     # Extensii permise pentru upload
-    ALLOWED_EXTENSIONS = {'txt', 'pdf', 'png', 'jpg', 'jpeg', 'gif', 'doc', 'docx'}
+    ALLOWED_EXTENSIONS = {'txt', 'pdf', 'png', 'jpg', 'jpeg', 'gif', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'zip', 'rar', 'log', 'csv', 'json', 'xml'}
     
     # Configurare criptare
     RSA_KEY_SIZE = 2048  # Dimensiune cheie RSA in biti

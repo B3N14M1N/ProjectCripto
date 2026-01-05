@@ -132,6 +132,32 @@ def get_conversation(conversation_id):
     })
 
 
+@chat_bp.route('/conversations/<int:conversation_id>', methods=['DELETE'])
+@login_required
+def delete_conversation(conversation_id):
+    """
+    Sterge o conversatie pentru ambii utilizatori.
+    Sterge toate mesajele si atasamentele asociate.
+    
+    Response:
+    {
+        "success": true,
+        "message": "Conversatie stearsa"
+    }
+    """
+    user_id = get_current_user_id()
+    
+    result = chat_service.delete_conversation(conversation_id, user_id)
+    
+    if not result['success']:
+        return jsonify({'error': result['error']}), 400
+    
+    return jsonify({
+        'success': True,
+        'message': 'Conversatie stearsa cu succes'
+    })
+
+
 # ==================== ENDPOINTS MESAJE ====================
 
 @chat_bp.route('/conversations/<int:conversation_id>/messages', methods=['GET'])

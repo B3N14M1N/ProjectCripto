@@ -79,7 +79,7 @@ function App() {
         localStorage.setItem(`privateKey_${response.data.user.id}`, response.data.private_key);
         setPrivateKey(response.data.private_key);
       }
-      navigate('/chat');
+      // Nu navigam automat - lasam RegisterPage sa afiseze modalul cu cheia
     }
     return response.data;
   };

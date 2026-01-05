@@ -148,6 +148,45 @@ class ChatService:
         
         return None
     
+    def delete_conversation(self, conversation_id, user_id):
+        """
+        Sterge o conversatie si toate mesajele/atasamentele asociate.
+        
+        Args:
+            conversation_id: ID conversatie
+            user_id: ID utilizator (pentru verificare acces)
+            
+        Returns:
+            dict: {'success': bool, 'error': mesaj eroare sau None}
+        """
+        from models import MessageAttachment
+        
+        # Verificam daca utilizatorul are acces la conversatie
+        conversation = self.get_conversation(conversation_id, user_id)
+        if not conversation:
+            return {'success': False, 'error': 'Conversatie negasita sau acces interzis'}
+        
+        try:
+            # Stergem atasamentele mesajelor din aceasta conversatie
+            messages = Message.query.filter_by(conversation_id=conversation_id).all()
+            for message in messages:
+                MessageAttachment.query.filter_by(message_id=message.id).delete()
+            
+            # Stergem mesajele
+            Message.query.filter_by(conversation_id=conversation_id).delete()
+            
+            # Stergem participantii
+            ConversationParticipant.query.filter_by(conversation_id=conversation_id).delete()
+            
+            # Stergem conversatia
+            db.session.delete(conversation)
+            db.session.commit()
+            
+            return {'success': True}
+        except Exception as e:
+            db.session.rollback()
+            return {'success': False, 'error': f'Eroare la stergere: {str(e)}'}
+    
     def get_user_conversations(self, user_id):
         """
         Obtine toate conversatiile unui utilizator, ordonate dupa activitate.

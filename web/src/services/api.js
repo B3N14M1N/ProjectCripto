@@ -74,6 +74,9 @@ export const chatAPI = {
   // Obtine detaliile unei conversatii
   getConversation: (conversationId) => api.get(`/conversations/${conversationId}`),
   
+  // Sterge o conversatie
+  deleteConversation: (conversationId) => api.delete(`/conversations/${conversationId}`),
+  
   // Obtine mesajele dintr-o conversatie
   getMessages: (conversationId, limit = 50, beforeId = null) => {
     let url = `/conversations/${conversationId}/messages?limit=${limit}`;
@@ -102,27 +105,48 @@ export const chatAPI = {
 // ==================== FISIERE ====================
 
 export const fileAPI = {
-  // Uploadeaza un fisier
-  uploadFile: (conversationId, file, caption = '') => {
+  // Uploadeaza fisiere (fara a trimite mesaj)
+  uploadFiles: (conversationId, files) => {
     const formData = new FormData();
-    formData.append('file', file);
-    formData.append('caption', caption);
+    files.forEach(file => {
+      formData.append('files', file);
+    });
     
     return api.post(`/files/upload/${conversationId}`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
   },
   
-  // Descarca un fisier
-  downloadFile: async (messageId, privateKey) => {
-    const response = await api.post(`/files/download/${messageId}`, 
+  // Trimite mesaj cu fisiere atasate
+  sendWithFiles: (conversationId, content, attachments) =>
+    api.post(`/files/send/${conversationId}`, { content, attachments }),
+  
+  // Descarca un atasament
+  downloadAttachment: async (attachmentId, privateKey) => {
+    const response = await api.post(`/files/download/${attachmentId}`, 
       { private_key: privateKey },
       { responseType: 'blob' }
     );
     return response;
   },
   
-  // Obtine informatii despre un fisier
+  // Descarca fisier din mesaj vechi (legacy)
+  downloadLegacy: async (messageId, privateKey) => {
+    const response = await api.post(`/files/download-legacy/${messageId}`, 
+      { private_key: privateKey },
+      { responseType: 'blob' }
+    );
+    return response;
+  },
+  
+  // Obtine imagine decriptata ca base64
+  getImage: (attachmentId, privateKey) =>
+    api.post(`/files/image/${attachmentId}`, { private_key: privateKey }),
+  
+  // Sterge fisier temporar
+  deleteTempFile: (tempId) => api.delete(`/files/delete-temp/${tempId}`),
+  
+  // Obtine informatii despre un fisier (legacy)
   getFileInfo: (messageId) => api.get(`/files/info/${messageId}`),
 };
 

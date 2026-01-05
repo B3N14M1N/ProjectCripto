@@ -109,13 +109,19 @@ class Message(db.Model):
         if current_user_id:
             result['encrypted_aes_key'] = self.get_encrypted_key_for_user(current_user_id)
         
-        # Informatii fisier daca exista
+        # Informatii fisier daca exista (pentru compatibilitate cu mesaje vechi)
         if self.message_type in ['image', 'file']:
             result['file_info'] = {
                 'name': self.file_name,
                 'size': self.file_size,
                 'mime_type': self.file_mime_type
             }
+        
+        # Adaugam atasamentele (fisiere multiple)
+        attachments_list = []
+        for att in self.attachments:
+            attachments_list.append(att.to_dict(current_user_id))
+        result['attachments'] = attachments_list
         
         return result
     

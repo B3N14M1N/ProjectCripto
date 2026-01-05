@@ -1,313 +1,218 @@
 // src/components/MessageArea.js
-// Componenta pentru zona de mesaje din centru
-// Afiseaza mesajele si permite trimiterea de mesaje noi
+// Componenta principală pentru zona de mesaje
+// Responsabilitate: orchestrare mesaje, input, și preview fișiere
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Message, FilesPreviewBar } from './Message';
+import { fileAPI } from '../services/api';
 import './MessageArea.css';
 
 /**
- * Componenta MessageArea
- * 
- * Structura:
- * 1. Header: informatii conversatie
- * 2. Lista mesaje: scrollabila, mesaje noi jos
- * 3. Input: trimitere mesaj, atasare fisiere
+ * Componenta pentru zona de mesaje din chat
  */
-function MessageArea({
+const MessageArea = ({
   conversation,
-  messages,
+  messages = [],
   currentUserId,
   privateKey,
-  onSendMessage,
-  onUploadFile,
   onDecryptMessage,
-  onShowKeyModal,
-  loading
-}) {
-  // State pentru input
-  const [messageInput, setMessageInput] = useState('');
-  const [sending, setSending] = useState(false);
-  const [decryptedMessages, setDecryptedMessages] = useState({});
-  const [decrypting, setDecrypting] = useState({});
-  
-  // Referinte
+  onSendMessage,
+  onSendWithFiles,
+  decryptedMessages = {},
+  loading = false,
+  onShowKeyModal
+}) => {
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
-  
-  // Scroll la ultimul mesaj cand se adauga mesaje noi
+  const [inputText, setInputText] = useState('');
+  const [selectedFiles, setSelectedFiles] = useState([]);
+  const [isSending, setIsSending] = useState(false);
+  const lastMessageCountRef = useRef(0);
+  const lastConversationIdRef = useRef(null);
+
+  // Scroll la jos doar la: 1) prima încărcare, 2) schimbare conversație, 3) mesaj propriu nou
   useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
-  
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    const isNewConversation = lastConversationIdRef.current !== conversation?.id;
+    const isNewMessage = messages.length > lastMessageCountRef.current;
+    const lastMessage = messages[messages.length - 1];
+    const isOwnNewMessage = isNewMessage && lastMessage?.sender_id === currentUserId;
+
+    if (isNewConversation || isOwnNewMessage) {
+      messagesEndRef.current?.scrollIntoView({ behavior: isNewConversation ? 'auto' : 'smooth' });
+    }
+
+    lastConversationIdRef.current = conversation?.id;
+    lastMessageCountRef.current = messages.length;
+  }, [messages, conversation?.id, currentUserId]);
+
+  // Handler pentru selectarea fișierelor
+  const handleFileSelect = (e) => {
+    const files = Array.from(e.target.files);
+    setSelectedFiles(prev => [...prev, ...files]);
+    e.target.value = '';
   };
-  
-  // Handler pentru trimitere mesaj
-  const handleSendMessage = async (e) => {
-    e.preventDefault();
-    if (!messageInput.trim() || sending) return;
-    
-    setSending(true);
+
+  const handleRemoveFile = (fileToRemove) => {
+    setSelectedFiles(prev => prev.filter(f => f !== fileToRemove));
+  };
+
+  const handleClearFiles = () => {
+    setSelectedFiles([]);
+  };
+
+  // Trimitere mesaj
+  const handleSend = async () => {
+    const hasText = inputText.trim().length > 0;
+    const hasFiles = selectedFiles.length > 0;
+
+    if (!hasText && !hasFiles) return;
+    if (!conversation) return;
+
+    setIsSending(true);
     try {
-      await onSendMessage(messageInput.trim());
-      setMessageInput('');
-    } catch (error) {
-      console.error('Eroare:', error);
+      if (hasFiles) {
+        // 1. Uploadăm toate fișierele
+        const uploadResponse = await fileAPI.uploadFiles(conversation.id, selectedFiles);
+        
+        if (uploadResponse.data.success && uploadResponse.data.uploaded_files) {
+          // 2. Trimitem mesajul cu fișierele uploadate
+          await onSendWithFiles(inputText.trim(), uploadResponse.data.uploaded_files);
+        } else {
+          throw new Error('Upload failed');
+        }
+      } else {
+        // Doar text
+        await onSendMessage(inputText.trim());
+      }
+      
+      setInputText('');
+      setSelectedFiles([]);
+    } catch (err) {
+      console.error('Send error:', err);
+      alert('Eroare la trimiterea mesajului: ' + (err.message || 'Eroare necunoscută'));
     } finally {
-      setSending(false);
+      setIsSending(false);
     }
   };
-  
-  // Handler pentru decriptare mesaj
-  const handleDecrypt = async (messageId) => {
-    if (!privateKey) {
-      onShowKeyModal();
-      return;
-    }
-    
-    if (decryptedMessages[messageId]) return; // Deja decriptat
-    
-    setDecrypting(prev => ({ ...prev, [messageId]: true }));
-    try {
-      const content = await onDecryptMessage(messageId);
-      setDecryptedMessages(prev => ({ ...prev, [messageId]: content }));
-    } catch (error) {
-      console.error('Eroare la decriptare:', error);
-      setDecryptedMessages(prev => ({ ...prev, [messageId]: 'Eroare la decriptare' }));
-    } finally {
-      setDecrypting(prev => ({ ...prev, [messageId]: false }));
+
+  // Enter pentru trimitere
+  const handleKeyPress = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
     }
   };
-  
-  // Handler pentru upload fisier
-  const handleFileSelect = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    
-    setSending(true);
-    try {
-      await onUploadFile(file);
-    } catch (error) {
-      console.error('Eroare upload:', error);
-    } finally {
-      setSending(false);
-      fileInputRef.current.value = '';
-    }
-  };
-  
-  // Formateaza ora mesajului
-  const formatTime = (dateString) => {
-    const date = new Date(dateString);
-    return date.toLocaleTimeString('ro-RO', { hour: '2-digit', minute: '2-digit' });
-  };
-  
-  // Afisare cand nu e selectata o conversatie
+
+  // Empty state când nu e selectată o conversație
   if (!conversation) {
     return (
       <div className="message-area empty-state">
-        <div className="empty-content">
-          <div className="empty-icon">
-            <svg viewBox="0 0 24 24" fill="currentColor" width="64" height="64">
-              <path d="M20 2H4c-1.1 0-1.99.9-1.99 2L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-2 12H6v-2h12v2zm0-3H6V9h12v2zm0-3H6V6h12v2z"/>
-            </svg>
-          </div>
-          <h2>Bine ai venit la SecureChat</h2>
-          <p>Selecteaza o conversatie sau cauta un utilizator pentru a incepe</p>
-          
-          <div className="crypto-info-card">
-            <h4>Cum functioneaza criptarea?</h4>
-            <div className="info-steps">
-              <div className="info-step">
-                <span className="step-number">1</span>
-                <span className="step-text">Mesajul tau este criptat cu <strong>AES-256</strong></span>
-              </div>
-              <div className="info-step">
-                <span className="step-number">2</span>
-                <span className="step-text">Cheia AES este criptata cu <strong>RSA</strong> pentru destinatar</span>
-              </div>
-              <div className="info-step">
-                <span className="step-number">3</span>
-                <span className="step-text">Doar destinatarul poate decripta cu cheia sa privata</span>
-              </div>
-            </div>
-          </div>
+        <div className="empty-conversation">
+          <svg viewBox="0 0 24 24" fill="currentColor" width="64" height="64">
+            <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/>
+          </svg>
+          <h3>Selectează o conversație</h3>
+          <p>Alege o conversație din sidebar sau începe una nouă</p>
         </div>
       </div>
     );
   }
-  
+
   return (
     <div className="message-area">
-      {/* Header conversatie */}
-      <div className="message-header">
-        <div className="header-info">
-          <div 
-            className="avatar"
-            style={{ backgroundColor: conversation.other_user?.avatar_color || '#3b82f6' }}
-          >
-            {conversation.name?.charAt(0).toUpperCase()}
-          </div>
-          <div className="header-text">
-            <span className="header-name">{conversation.name}</span>
-            <span className="header-status">
-              <svg viewBox="0 0 24 24" fill="currentColor" width="12" height="12">
-                <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/>
-              </svg>
-              Mesaje criptate end-to-end
-            </span>
-          </div>
-        </div>
+      {/* Header conversație - simplu */}
+      <div className="chat-header">
+        <span className="chat-partner-name">
+          {conversation.name || conversation.other_participant?.username || 'Conversație'}
+        </span>
+        <span className="encryption-status">
+          <svg viewBox="0 0 24 24" fill="currentColor" width="12" height="12">
+            <path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/>
+          </svg>
+          End-to-end encrypted
+        </span>
       </div>
-      
+
       {/* Lista mesaje */}
       <div className="messages-container">
         {loading ? (
-          <div className="messages-loading">
-            <div className="spinner"></div>
+          <div className="loading-messages">
+            <div className="loading-spinner"></div>
+            <span>Se încarcă mesajele...</span>
           </div>
         ) : messages.length === 0 ? (
-          <div className="messages-empty">
-            <p>Niciun mesaj inca</p>
-            <p className="text-sm">Trimite primul mesaj pentru a incepe conversatia</p>
+          <div className="empty-messages">
+            <span>Nu există mesaje încă.</span>
+            <span className="empty-hint">Trimite primul mesaj!</span>
           </div>
         ) : (
-          <div className="messages-list">
-            {messages.map((message, index) => {
-              const isOwn = message.sender_id === currentUserId;
-              const showAvatar = !isOwn && (index === 0 || messages[index - 1]?.sender_id !== message.sender_id);
-              const isDecrypted = decryptedMessages[message.id];
-              const isDecrypting = decrypting[message.id];
-              
-              return (
-                <div 
-                  key={message.id} 
-                  className={`message ${isOwn ? 'own' : 'other'}`}
-                >
-                  {!isOwn && showAvatar && (
-                    <div 
-                      className="avatar avatar-sm"
-                      style={{ backgroundColor: message.sender_avatar_color || '#3b82f6' }}
-                    >
-                      {message.sender_username?.charAt(0).toUpperCase()}
-                    </div>
-                  )}
-                  {!isOwn && !showAvatar && <div className="avatar-placeholder"></div>}
-                  
-                  <div className="message-content">
-                    {!isOwn && showAvatar && (
-                      <span className="message-sender">{message.sender_username}</span>
-                    )}
-                    
-                    <div className="message-bubble">
-                      {isDecrypted ? (
-                        <p className="message-text">{isDecrypted}</p>
-                      ) : (
-                        <div className="encrypted-content">
-                          <div className="encrypted-preview">
-                            <svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14">
-                              <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/>
-                            </svg>
-                            <span>Mesaj criptat</span>
-                          </div>
-                          <button 
-                            className="decrypt-btn"
-                            onClick={() => handleDecrypt(message.id)}
-                            disabled={isDecrypting}
-                          >
-                            {isDecrypting ? 'Se decripteaza...' : 'Decripteaza'}
-                          </button>
-                        </div>
-                      )}
-                      
-                      <div className="message-meta">
-                        <span className="message-time">{formatTime(message.created_at)}</span>
-                        {isOwn && (
-                          <svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14" className="sent-icon">
-                            <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
-                          </svg>
-                        )}
-                      </div>
-                    </div>
-                    
-                    {/* Indicator criptare (tooltip) */}
-                    <div className="crypto-tooltip">
-                      <span className="encryption-indicator aes">AES-256</span>
-                      <div className="tooltip-content">
-                        <h4>Despre acest mesaj</h4>
-                        <p>Continut criptat cu: <strong>AES-256-CBC</strong></p>
-                        <p>Cheie schimbata cu: <strong>RSA-2048</strong></p>
-                        <p>IV: {message.iv?.substring(0, 16)}...</p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-            <div ref={messagesEndRef} />
-          </div>
+          messages.map(msg => (
+            <Message
+              key={msg.id}
+              message={msg}
+              isOwn={msg.sender_id === currentUserId}
+              privateKey={privateKey}
+              onDecrypt={onDecryptMessage}
+              decryptedContent={decryptedMessages[msg.id]}
+              onShowKeyModal={onShowKeyModal}
+            />
+          ))
         )}
+        <div ref={messagesEndRef} />
       </div>
-      
-      {/* Input mesaj */}
-      <div className="message-input-container">
-        <form onSubmit={handleSendMessage} className="message-form">
-          {/* Buton atasare fisier */}
-          <input
-            type="file"
-            ref={fileInputRef}
-            onChange={handleFileSelect}
-            style={{ display: 'none' }}
-            accept="image/*,.pdf,.doc,.docx,.txt"
-          />
-          <button 
-            type="button" 
-            className="btn-icon attach-btn"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={sending}
-            title="Ataseaza fisier"
-          >
-            <svg viewBox="0 0 24 24" fill="currentColor" width="22" height="22">
-              <path d="M16.5 6v11.5c0 2.21-1.79 4-4 4s-4-1.79-4-4V5c0-1.38 1.12-2.5 2.5-2.5s2.5 1.12 2.5 2.5v10.5c0 .55-.45 1-1 1s-1-.45-1-1V6H10v9.5c0 1.38 1.12 2.5 2.5 2.5s2.5-1.12 2.5-2.5V5c0-2.21-1.79-4-4-4S7 2.79 7 5v12.5c0 3.04 2.46 5.5 5.5 5.5s5.5-2.46 5.5-5.5V6h-1.5z"/>
-            </svg>
-          </button>
-          
-          {/* Input text */}
-          <input
-            type="text"
-            className="message-input"
-            value={messageInput}
-            onChange={(e) => setMessageInput(e.target.value)}
-            placeholder="Scrie un mesaj securizat..."
-            disabled={sending}
-          />
-          
-          {/* Buton trimitere */}
-          <button 
-            type="submit" 
-            className="btn btn-primary send-btn"
-            disabled={!messageInput.trim() || sending}
-          >
-            {sending ? (
-              <div className="spinner" style={{width: '18px', height: '18px'}}></div>
-            ) : (
-              <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
-                <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
-              </svg>
-            )}
-          </button>
-        </form>
-        
-        {/* Info despre criptare */}
-        <div className="input-info">
-          <svg viewBox="0 0 24 24" fill="currentColor" width="12" height="12">
-            <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/>
+
+      {/* Preview fișiere selectate */}
+      <FilesPreviewBar
+        files={selectedFiles}
+        onRemoveFile={handleRemoveFile}
+        onClearAll={handleClearFiles}
+      />
+
+      {/* Input zona */}
+      <div className="message-input-area">
+        <button
+          className="attach-btn"
+          onClick={() => fileInputRef.current?.click()}
+          title="Atașează fișiere"
+        >
+          <svg viewBox="0 0 24 24" fill="currentColor" width="24" height="24">
+            <path d="M16.5 6v11.5c0 2.21-1.79 4-4 4s-4-1.79-4-4V5c0-1.38 1.12-2.5 2.5-2.5s2.5 1.12 2.5 2.5v10.5c0 .55-.45 1-1 1s-1-.45-1-1V6H10v9.5c0 1.38 1.12 2.5 2.5 2.5s2.5-1.12 2.5-2.5V5c0-2.21-1.79-4-4-4S7 2.79 7 5v12.5c0 3.04 2.46 5.5 5.5 5.5s5.5-2.46 5.5-5.5V6h-1.5z"/>
           </svg>
-          <span>Mesajele sunt criptate automat cu AES-256 si RSA-2048</span>
-        </div>
+        </button>
+        
+        <input
+          type="file"
+          ref={fileInputRef}
+          onChange={handleFileSelect}
+          multiple
+          style={{ display: 'none' }}
+        />
+        
+        <textarea
+          className="message-input"
+          value={inputText}
+          onChange={(e) => setInputText(e.target.value)}
+          onKeyPress={handleKeyPress}
+          placeholder="Scrie un mesaj..."
+          rows={1}
+        />
+        
+        <button
+          className="send-btn"
+          onClick={handleSend}
+          disabled={isSending || (!inputText.trim() && selectedFiles.length === 0)}
+        >
+          {isSending ? (
+            <div className="sending-spinner"></div>
+          ) : (
+            <svg viewBox="0 0 24 24" fill="currentColor" width="24" height="24">
+              <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+            </svg>
+          )}
+        </button>
       </div>
     </div>
   );
-}
+};
 
 export default MessageArea;

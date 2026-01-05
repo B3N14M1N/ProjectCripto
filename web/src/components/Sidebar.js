@@ -22,6 +22,8 @@ function Sidebar({
   onSearchUsers,
   onLogout,
   onShowCryptoInfo,
+  onShowPrivateKeyModal,
+  onDeleteConversation,
   loading
 }) {
   // State pentru cautare
@@ -29,6 +31,8 @@ function Sidebar({
   const [searchResults, setSearchResults] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
+  // State pentru meniul contextual de stergere
+  const [showDeleteMenu, setShowDeleteMenu] = useState(null);
   
   // Handler pentru cautare
   const handleSearch = async (query) => {
@@ -206,6 +210,10 @@ function Sidebar({
                 key={conv.id}
                 className={`conversation-item ${conv.id === currentConversationId ? 'active' : ''}`}
                 onClick={() => onSelectConversation(conv.id)}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  setShowDeleteMenu(conv.id);
+                }}
               >
                 <div 
                   className="avatar"
@@ -217,11 +225,9 @@ function Sidebar({
                 <div className="conversation-info">
                   <div className="conversation-header">
                     <span className="conversation-name">{conv.name}</span>
-                    {conv.last_message && (
-                      <span className="conversation-time">
-                        {formatTime(conv.last_message.created_at)}
-                      </span>
-                    )}
+                    <span className="conversation-time">
+                      {conv.last_message && formatTime(conv.last_message.created_at)}
+                    </span>
                   </div>
                   <div className="conversation-preview">
                     <span className="preview-text">
@@ -239,6 +245,48 @@ function Sidebar({
                     )}
                   </div>
                 </div>
+                
+                {/* Buton stergere - pozitionat absolut */}
+                <button
+                  className="btn-delete-conv"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowDeleteMenu(showDeleteMenu === conv.id ? null : conv.id);
+                  }}
+                  title="Sterge conversatia"
+                >
+                  <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16">
+                    <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
+                  </svg>
+                </button>
+                
+                {/* Meniu confirmare stergere */}
+                {showDeleteMenu === conv.id && (
+                  <div className="delete-menu" onClick={(e) => e.stopPropagation()}>
+                    <p>Stergi conversatia?</p>
+                    <div className="delete-menu-actions">
+                      <button 
+                        className="btn-confirm-delete"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onDeleteConversation(conv.id);
+                          setShowDeleteMenu(null);
+                        }}
+                      >
+                        Da, sterge
+                      </button>
+                      <button 
+                        className="btn-cancel-delete"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setShowDeleteMenu(null);
+                        }}
+                      >
+                        Anuleaza
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -247,12 +295,16 @@ function Sidebar({
       
       {/* Footer cu info */}
       <div className="sidebar-footer">
-        <div className="encryption-badge">
+        <button 
+          className="encryption-badge-btn"
+          onClick={onShowPrivateKeyModal}
+          title="Configureaza cheia privata"
+        >
           <svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14">
             <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/>
           </svg>
           <span>Criptare end-to-end</span>
-        </div>
+        </button>
       </div>
     </div>
   );

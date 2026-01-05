@@ -11,6 +11,8 @@ db = SQLAlchemy()
 from .user import User
 from .conversation import Conversation, ConversationParticipant
 from .message import Message
+from .attachment import MessageAttachment
 
 # Exportam toate modelele pentru acces facil
-__all__ = ['db', 'User', 'Conversation', 'ConversationParticipant', 'Message']
+__all__ = ['db', 'User', 'Conversation', 'ConversationParticipant', 'Message', 'MessageAttachment']
+

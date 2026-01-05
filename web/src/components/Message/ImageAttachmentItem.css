@@ -1,0 +1,144 @@
+/* src/components/Message/ImageAttachmentItem.css */
+/* Stiluri pentru componenta ImageAttachmentItem */
+
+.image-attachment-item {
+  position: relative;
+  max-width: 320px;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #f3f4f6;
+}
+
+.image-attachment-item.own {
+  margin-left: auto;
+}
+
+.decrypted-image {
+  display: block;
+  max-width: 100%;
+  max-height: 400px;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: transform 0.2s ease;
+}
+
+.decrypted-image:hover {
+  transform: scale(1.02);
+}
+
+.image-overlay {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 12px;
+  background: linear-gradient(transparent, rgba(0, 0, 0, 0.6));
+  display: flex;
+  justify-content: flex-end;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.image-attachment-item:hover .image-overlay {
+  opacity: 1;
+}
+
+.download-image-btn {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.95);
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.download-image-btn:hover {
+  background: white;
+  transform: scale(1.1);
+}
+
+.download-image-btn svg {
+  width: 18px;
+  height: 18px;
+  color: #1f2937;
+}
+
+.image-loading,
+.image-error,
+.image-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+  gap: 12px;
+  min-height: 150px;
+  background: #f9fafb;
+  border-radius: 12px;
+  border: 1px solid #e5e7eb;
+}
+
+.image-loading span,
+.image-error span,
+.image-placeholder span {
+  font-size: 0.875rem;
+  color: #6b7280;
+  text-align: center;
+}
+
+.image-placeholder svg {
+  width: 48px;
+  height: 48px;
+  color: #9ca3af;
+}
+
+.spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid #e5e7eb;
+  border-top-color: #3b82f6;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+.load-btn,
+.retry-btn {
+  padding: 8px 16px;
+  background: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.load-btn:hover,
+.retry-btn:hover {
+  background: #2563eb;
+}
+
+.image-error {
+  background: #fef2f2;
+  border-color: #fecaca;
+}
+
+.image-error span {
+  color: #dc2626;
+}
+
+.retry-btn {
+  background: #ef4444;
+}
+
+.retry-btn:hover {
+  background: #dc2626;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}

@@ -137,19 +137,32 @@ function ChatPage() {
     }
   };
   
-  // Functie pentru upload fisier
-  const uploadFile = async (file, caption = '') => {
-    if (!conversationId || !file) return;
+  // Functie pentru trimitere mesaj cu fisiere multiple
+  const sendWithFiles = async (content, uploadedFiles) => {
+    if (!conversationId || !uploadedFiles.length) return;
     
     try {
-      const response = await fileAPI.uploadFile(conversationId, file, caption);
+      // Mapam toate campurile necesare pentru backend
+      const fileData = uploadedFiles.map(f => ({
+        temp_id: f.temp_id,
+        name: f.name,
+        size: f.size,
+        mime_type: f.mime_type,
+        file_type: f.file_type,
+        file_icon: f.file_icon,
+        encrypted_path: f.encrypted_path,
+        encrypted_aes_keys: f.encrypted_aes_keys,
+        iv: f.iv
+      }));
+      
+      const response = await fileAPI.sendWithFiles(conversationId, content, fileData);
       if (response.data.success) {
         setMessages(prev => [...prev, response.data.message]);
         loadConversations(true);
       }
       return response.data;
     } catch (error) {
-      console.error('Eroare la upload:', error);
+      console.error('Eroare la trimitere cu fisiere:', error);
       throw error;
     }
   };
@@ -177,6 +190,23 @@ function ChatPage() {
     } catch (error) {
       console.error('Eroare la cautare:', error);
       return [];
+    }
+  };
+  
+  // Functie pentru stergerea unei conversatii
+  const deleteConversation = async (convId) => {
+    try {
+      const response = await chatAPI.deleteConversation(convId);
+      if (response.data.success) {
+        // Actualizam lista de conversatii
+        loadConversations();
+        // Daca stergem conversatia curenta, navigam la pagina de chat fara ID
+        if (conversationId && parseInt(conversationId) === convId) {
+          navigate('/chat');
+        }
+      }
+    } catch (error) {
+      console.error('Eroare la stergerea conversatiei:', error);
     }
   };
   
@@ -217,6 +247,8 @@ function ChatPage() {
         onSearchUsers={searchUsers}
         onLogout={logout}
         onShowCryptoInfo={() => setShowCryptoPanel(!showCryptoPanel)}
+        onShowPrivateKeyModal={() => setShowPrivateKeyModal(true)}
+        onDeleteConversation={deleteConversation}
         loading={loadingConversations}
       />
       
@@ -227,7 +259,7 @@ function ChatPage() {
         currentUserId={user?.id}
         privateKey={privateKey}
         onSendMessage={sendMessage}
-        onUploadFile={uploadFile}
+        onSendWithFiles={sendWithFiles}
         onDecryptMessage={decryptMessage}
         onShowKeyModal={() => setShowPrivateKeyModal(true)}
         loading={loadingMessages}

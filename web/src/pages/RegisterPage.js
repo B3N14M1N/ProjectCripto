@@ -3,7 +3,7 @@
 // Creeaza cont nou si genereaza chei RSA
 
 import React, { useState, useContext } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { AuthContext } from '../App';
 import './AuthPages.css';
 
@@ -13,10 +13,12 @@ import './AuthPages.css';
  * La inregistrare:
  * 1. Se creeaza contul cu username, email, parola
  * 2. Se genereaza automat o pereche de chei RSA
- * 3. Cheia privata este salvata local (important pentru decriptare!)
+ * 3. Utilizatorul poate descarca cheia privata intr-un fisier
+ * 4. Cheia privata este salvata si local in browser
  */
 function RegisterPage() {
   const { register } = useContext(AuthContext);
+  const navigate = useNavigate();
   
   // State pentru formular
   const [username, setUsername] = useState('');
@@ -25,6 +27,26 @@ function RegisterPage() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  
+  // State pentru ecranul de succes cu cheia privata
+  const [showKeyModal, setShowKeyModal] = useState(false);
+  const [privateKeyData, setPrivateKeyData] = useState(null);
+  const [registeredUsername, setRegisteredUsername] = useState('');
+  
+  // Functie pentru descarcarea cheii private
+  const downloadPrivateKey = () => {
+    if (!privateKeyData) return;
+    
+    const blob = new Blob([privateKeyData], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${registeredUsername}_private_key.pem`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
   
   // Handler pentru submit
   const handleSubmit = async (e) => {
@@ -51,7 +73,12 @@ function RegisterPage() {
     
     try {
       const result = await register(username, email, password);
-      if (!result.success) {
+      if (result.success) {
+        // Afisam modalul cu cheia privata
+        setPrivateKeyData(result.private_key);
+        setRegisteredUsername(username);
+        setShowKeyModal(true);
+      } else {
         setError(result.error || 'Eroare la inregistrare');
       }
     } catch (err) {
@@ -158,13 +185,94 @@ function RegisterPage() {
           </p>
           <ul>
             <li><strong>Cheia publica</strong> - vizibila pentru toti, folosita pentru a-ti trimite mesaje criptate</li>
-            <li><strong>Cheia privata</strong> - salvata local, necesara pentru decriptarea mesajelor primite</li>
+            <li><strong>Cheia privata</strong> - necesara pentru decriptarea mesajelor primite</li>
           </ul>
           <p className="text-sm text-muted" style={{marginTop: '8px'}}>
-            Cheia privata este salvata automat in browser. Daca o pierzi, nu vei putea citi mesajele criptate!
+            Vei avea optiunea sa descarci cheia privata intr-un fisier pentru backup.
           </p>
         </div>
       </div>
+      
+      {/* Modal pentru salvarea cheii private */}
+      {showKeyModal && (
+        <div className="modal-overlay">
+          <div className="modal modal-lg">
+            <div className="modal-header">
+              <h3>
+                <svg viewBox="0 0 24 24" fill="currentColor" width="24" height="24" style={{color: '#22c55e', marginRight: '8px'}}>
+                  <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+                </svg>
+                Cont creat cu succes!
+              </h3>
+            </div>
+            <div className="modal-body">
+              <div className="success-box" style={{marginBottom: '20px'}}>
+                <p style={{color: '#22c55e', fontWeight: '600', marginBottom: '8px'}}>
+                  ✓ Perechea de chei RSA a fost generata
+                </p>
+                <p style={{color: '#6b7280', fontSize: '14px'}}>
+                  Cheia privata este salvata automat in browser, dar recomandam sa o descarci 
+                  si intr-un fisier pentru backup, in caz ca schimbi dispozitivul.
+                </p>
+              </div>
+              
+              <div className="key-preview-box" style={{
+                background: '#1f2937',
+                borderRadius: '8px',
+                padding: '16px',
+                marginBottom: '16px'
+              }}>
+                <label style={{color: '#9ca3af', fontSize: '12px', display: 'block', marginBottom: '8px'}}>
+                  Cheia ta privata RSA-2048:
+                </label>
+                <pre style={{
+                  color: '#e5e7eb',
+                  fontSize: '11px',
+                  fontFamily: 'monospace',
+                  whiteSpace: 'pre-wrap',
+                  wordBreak: 'break-all',
+                  maxHeight: '150px',
+                  overflow: 'auto',
+                  margin: 0
+                }}>
+                  {privateKeyData}
+                </pre>
+              </div>
+              
+              <div className="warning-box" style={{
+                background: '#fef3c7',
+                border: '1px solid #fbbf24',
+                borderRadius: '8px',
+                padding: '12px',
+                marginBottom: '16px'
+              }}>
+                <p style={{color: '#92400e', fontSize: '13px', margin: 0}}>
+                  <strong>⚠️ Important:</strong> Aceasta cheie este necesara pentru a decripta mesajele. 
+                  Daca o pierzi, nu vei mai putea citi mesajele primite!
+                </p>
+              </div>
+            </div>
+            <div className="modal-footer" style={{display: 'flex', gap: '12px', justifyContent: 'flex-end'}}>
+              <button 
+                className="btn btn-secondary"
+                onClick={downloadPrivateKey}
+                style={{display: 'flex', alignItems: 'center', gap: '8px'}}
+              >
+                <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18">
+                  <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
+                </svg>
+                Descarca cheia (.pem)
+              </button>
+              <button 
+                className="btn btn-primary"
+                onClick={() => navigate('/chat')}
+              >
+                Continua catre chat
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
