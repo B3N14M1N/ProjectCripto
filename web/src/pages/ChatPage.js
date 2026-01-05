@@ -298,13 +298,19 @@ function ChatPage() {
                     ✓ Cheia privata este configurata
                   </p>
                   <div className="input-group">
-                    <label className="input-label">Cheia ta privata (ascunsa):</label>
+                    <label className="input-label">Cheia ta privata:</label>
                     <textarea
-                      className="input"
-                      value={privateKey.substring(0, 50) + '...'}
+                      className="input private-key-textarea"
+                      value={privateKey}
                       readOnly
-                      rows={3}
-                      style={{fontFamily: 'monospace', fontSize: '12px'}}
+                      rows={12}
+                      style={{
+                        fontFamily: 'monospace', 
+                        fontSize: '11px',
+                        resize: 'vertical',
+                        minHeight: '200px',
+                        maxHeight: '400px'
+                      }}
                     />
                   </div>
                 </div>
@@ -312,12 +318,18 @@ function ChatPage() {
                 <div className="input-group">
                   <label className="input-label">Introdu cheia privata RSA:</label>
                   <textarea
-                    className="input"
+                    className="input private-key-textarea"
                     value={tempPrivateKey}
                     onChange={(e) => setTempPrivateKey(e.target.value)}
                     placeholder="-----BEGIN PRIVATE KEY-----&#10;...&#10;-----END PRIVATE KEY-----"
-                    rows={8}
-                    style={{fontFamily: 'monospace', fontSize: '12px'}}
+                    rows={12}
+                    style={{
+                      fontFamily: 'monospace', 
+                      fontSize: '11px',
+                      resize: 'vertical',
+                      minHeight: '200px',
+                      maxHeight: '400px'
+                    }}
                   />
                   <p className="text-sm text-muted" style={{marginTop: '8px'}}>
                     Ai primit cheia privata la inregistrare. 
