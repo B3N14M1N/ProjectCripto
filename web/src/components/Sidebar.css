@@ -363,7 +363,7 @@
   border: none;
   border-radius: var(--radius-sm);
   cursor: pointer;
-  background: var(--danger-color);
+  background: #ef4444;
   color: white;
   transition: background 0.2s;
 }

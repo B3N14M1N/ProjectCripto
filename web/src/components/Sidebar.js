@@ -2,7 +2,7 @@
 // Componenta pentru sidebar-ul din stanga
 // Contine: profil, cautare, lista conversatii
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import './Sidebar.css';
 
 /**
@@ -33,6 +33,21 @@ function Sidebar({
   const [showSearch, setShowSearch] = useState(false);
   // State pentru meniul contextual de stergere
   const [showDeleteMenu, setShowDeleteMenu] = useState(null);
+  
+  // Ref pentru detectarea click-ului in afara meniului
+  const deleteMenuRef = useRef(null);
+  
+  // Inchide meniul cand se da click in afara
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (showDeleteMenu && deleteMenuRef.current && !deleteMenuRef.current.contains(event.target)) {
+        setShowDeleteMenu(null);
+      }
+    };
+    
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showDeleteMenu]);
   
   // Handler pentru cautare
   const handleSearch = async (query) => {
@@ -262,8 +277,8 @@ function Sidebar({
                 
                 {/* Meniu confirmare stergere */}
                 {showDeleteMenu === conv.id && (
-                  <div className="delete-menu" onClick={(e) => e.stopPropagation()}>
-                    <p>Stergi conversatia?</p>
+                  <div className="delete-menu" ref={deleteMenuRef} onClick={(e) => e.stopPropagation()}>
+                    <p>Stergi?</p>
                     <div className="delete-menu-actions">
                       <button 
                         className="btn-confirm-delete"
@@ -273,7 +288,7 @@ function Sidebar({
                           setShowDeleteMenu(null);
                         }}
                       >
-                        Da, sterge
+                        Da
                       </button>
                       <button 
                         className="btn-cancel-delete"
@@ -282,7 +297,7 @@ function Sidebar({
                           setShowDeleteMenu(null);
                         }}
                       >
-                        Anuleaza
+                        Nu
                       </button>
                     </div>
                   </div>
