@@ -1,11 +1,48 @@
+# docker-compose.yml pentru SecureChat
+# Aplicatie de chat cu criptare end-to-end AES+RSA
 version: '3.8'
 
 services:
-  web:
+  # Serviciu pentru development (backend Flask + frontend separat)
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./app:/app/app
+      - ./data:/app/data
+    environment:
+      - DATA_DIR=/app/data
+    restart: unless-stopped
+
+  # Serviciu pentru frontend React (development cu hot reload)
+  frontend:
+    image: node:18-slim
+    working_dir: /web
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./web:/web
+      - /web/node_modules
+    environment:
+      - REACT_APP_API_URL=http://backend:5000
+      - CHOKIDAR_USEPOLLING=true
+      - WDS_SOCKET_HOST=127.0.0.1
+    command: sh -c "npm install && npm start"
+    depends_on:
+      - backend
+
+  # Serviciu pentru productie (totul intr-un singur container)
+  production:
     build: .
     ports:
       - "5000:5000"
     volumes:
-      - ./app:/app
+      - ./data:/app/data
     environment:
-      - FLASK_ENV=development
+      - DATA_DIR=/app/data
+    profiles:
+      - prod
+    restart: unless-stopped

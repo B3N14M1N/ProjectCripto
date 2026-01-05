@@ -1,0 +1,158 @@
+/* src/pages/AuthPages.css */
+/* Stiluri pentru paginile de autentificare (Login si Register) */
+
+.auth-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--spacing-lg);
+  background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%);
+}
+
+.auth-container {
+  width: 100%;
+  max-width: 420px;
+  background: var(--bg-primary);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  padding: var(--spacing-xl);
+}
+
+/* Header */
+.auth-header {
+  text-align: center;
+  margin-bottom: var(--spacing-xl);
+}
+
+.auth-logo {
+  width: 64px;
+  height: 64px;
+  margin: 0 auto var(--spacing-md);
+  background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%);
+  border-radius: var(--radius-lg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+}
+
+.auth-logo svg {
+  width: 36px;
+  height: 36px;
+}
+
+.auth-header h1 {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: var(--spacing-xs);
+}
+
+.auth-subtitle {
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+/* Formular */
+.auth-form {
+  margin-bottom: var(--spacing-lg);
+}
+
+.auth-form .input-group {
+  margin-bottom: var(--spacing-md);
+}
+
+.auth-form .btn {
+  margin-top: var(--spacing-md);
+  padding: 12px;
+  font-size: 15px;
+}
+
+/* Footer cu link */
+.auth-footer {
+  text-align: center;
+  padding-top: var(--spacing-md);
+  border-top: 1px solid var(--bg-tertiary);
+}
+
+.auth-footer p {
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.auth-footer a {
+  color: var(--primary-color);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.auth-footer a:hover {
+  text-decoration: underline;
+}
+
+/* Box informativ despre criptare */
+.crypto-info-box {
+  margin-top: var(--spacing-lg);
+  padding: var(--spacing-md);
+  background: #eff6ff;
+  border-radius: var(--radius-md);
+  border-left: 4px solid var(--primary-color);
+}
+
+.crypto-info-box.warning {
+  background: #fefce8;
+  border-left-color: var(--warning-color);
+}
+
+.crypto-info-box h4 {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: var(--spacing-sm);
+}
+
+.crypto-info-box h4 svg {
+  color: var(--primary-color);
+}
+
+.crypto-info-box.warning h4 svg {
+  color: var(--warning-color);
+}
+
+.crypto-info-box p {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.crypto-info-box ul {
+  margin: var(--spacing-sm) 0;
+  padding-left: var(--spacing-lg);
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.crypto-info-box li {
+  margin-bottom: var(--spacing-xs);
+}
+
+/* Erori si succese */
+.auth-form .error-message {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  padding: var(--spacing-sm) var(--spacing-md);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--spacing-md);
+}
+
+.auth-form .success-message {
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  padding: var(--spacing-sm) var(--spacing-md);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--spacing-md);
+}

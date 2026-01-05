@@ -1,0 +1,8 @@
+# Acest director contine date persistente
+# - chat.db: baza de date SQLite
+# - uploads/: fisiere incarcate (criptate)
+
+# Ignora totul din acest director cu exceptia .gitkeep
+*
+!.gitkeep
+!README.md

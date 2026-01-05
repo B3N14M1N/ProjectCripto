@@ -1,0 +1,309 @@
+/* src/components/MessageArea.css */
+/* Stiluri pentru zona de mesaje */
+
+.message-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: var(--bg-secondary);
+}
+
+.message-area.empty-state {
+  align-items: center;
+  justify-content: center;
+}
+
+/* Empty state */
+.empty-content {
+  text-align: center;
+  max-width: 400px;
+  padding: var(--spacing-xl);
+}
+
+.empty-icon {
+  color: var(--bg-tertiary);
+  margin-bottom: var(--spacing-lg);
+}
+
+.empty-content h2 {
+  font-size: 24px;
+  font-weight: 600;
+  margin-bottom: var(--spacing-sm);
+}
+
+.empty-content > p {
+  color: var(--text-secondary);
+}
+
+.crypto-info-card {
+  margin-top: var(--spacing-xl);
+  padding: var(--spacing-lg);
+  background: var(--bg-primary);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  text-align: left;
+}
+
+.crypto-info-card h4 {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: var(--spacing-md);
+  color: var(--text-primary);
+}
+
+.info-steps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.info-step {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.step-number {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--primary-color);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.step-text {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+/* Header */
+.message-header {
+  padding: var(--spacing-md) var(--spacing-lg);
+  background: var(--bg-primary);
+  border-bottom: 1px solid var(--bg-tertiary);
+}
+
+.header-info {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.header-text {
+  display: flex;
+  flex-direction: column;
+}
+
+.header-name {
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.header-status {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--success-color);
+}
+
+/* Messages container */
+.messages-container {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--spacing-md) var(--spacing-lg);
+}
+
+.messages-loading,
+.messages-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--text-muted);
+}
+
+.messages-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+/* Message */
+.message {
+  display: flex;
+  gap: var(--spacing-sm);
+  max-width: 75%;
+}
+
+.message.own {
+  margin-left: auto;
+  flex-direction: row-reverse;
+}
+
+.avatar-placeholder {
+  width: 32px;
+  flex-shrink: 0;
+}
+
+.message-content {
+  display: flex;
+  flex-direction: column;
+}
+
+.message-sender {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  margin-bottom: 2px;
+  margin-left: 12px;
+}
+
+.message-bubble {
+  padding: var(--spacing-sm) var(--spacing-md);
+  border-radius: var(--radius-lg);
+  background: var(--bg-primary);
+  box-shadow: var(--shadow-sm);
+}
+
+.message.own .message-bubble {
+  background: var(--primary-color);
+  color: white;
+}
+
+.message-text {
+  font-size: 14px;
+  line-height: 1.4;
+  word-wrap: break-word;
+}
+
+.message-meta {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.message-time {
+  font-size: 11px;
+  opacity: 0.7;
+}
+
+.sent-icon {
+  opacity: 0.7;
+}
+
+/* Encrypted content */
+.encrypted-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.encrypted-preview {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.message.own .encrypted-preview {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.decrypt-btn {
+  padding: 4px 12px;
+  font-size: 12px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--bg-tertiary);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.decrypt-btn:hover {
+  background: var(--bg-tertiary);
+}
+
+.message.own .decrypt-btn {
+  background: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.3);
+  color: white;
+}
+
+.message.own .decrypt-btn:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+/* Crypto tooltip pe mesaj */
+.message .crypto-tooltip {
+  margin-top: 4px;
+}
+
+.message .crypto-tooltip .tooltip-content {
+  bottom: 100%;
+  left: 0;
+  margin-bottom: 8px;
+}
+
+.message.own .crypto-tooltip .tooltip-content {
+  left: auto;
+  right: 0;
+}
+
+/* Input container */
+.message-input-container {
+  padding: var(--spacing-md) var(--spacing-lg);
+  background: var(--bg-primary);
+  border-top: 1px solid var(--bg-tertiary);
+}
+
+.message-form {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  background: var(--bg-secondary);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-xs);
+}
+
+.attach-btn {
+  padding: 8px;
+}
+
+.message-input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  font-size: 14px;
+  padding: var(--spacing-sm);
+}
+
+.message-input:focus {
+  outline: none;
+}
+
+.send-btn {
+  padding: 10px 16px;
+  border-radius: var(--radius-md);
+}
+
+.input-info {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-xs);
+  margin-top: var(--spacing-sm);
+  font-size: 11px;
+  color: var(--text-muted);
+}
