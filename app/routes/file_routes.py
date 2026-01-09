@@ -125,6 +125,73 @@ def upload_files(conversation_id):
     }), 201
 
 
+@file_bp.route('/upload-encrypted/<int:conversation_id>', methods=['POST'])
+@login_required
+def upload_encrypted_file(conversation_id):
+    """
+    Uploadeaza un fisier pre-criptat de client (E2E complet).
+    Serverul doar stocheaza datele criptate, nu are acces la continut.
+    
+    Request Body:
+    {
+        "encrypted_content": "base64...",
+        "iv": "base64...",
+        "encrypted_aes_keys": {"user_id_1": "base64...", "user_id_2": "..."},
+        "file_name": "document.pdf",
+        "file_size": 102400,
+        "mime_type": "application/pdf"
+    }
+    
+    Response:
+    {
+        "success": true,
+        "file_info": {...}
+    }
+    """
+    user_id = get_current_user_id()
+    data = request.get_json()
+    
+    # Verificam accesul la conversatie
+    conversation = chat_service.get_conversation(conversation_id, user_id)
+    if not conversation:
+        return jsonify({'error': 'Conversatie negasita sau acces interzis'}), 404
+    
+    encrypted_content = data.get('encrypted_content')
+    iv = data.get('iv')
+    encrypted_aes_keys = data.get('encrypted_aes_keys')
+    file_name = data.get('file_name', 'file')
+    file_size = data.get('file_size', 0)
+    mime_type = data.get('mime_type', 'application/octet-stream')
+    
+    if not encrypted_content or not iv or not encrypted_aes_keys:
+        return jsonify({'error': 'Date criptate incomplete'}), 400
+    
+    # Stocam fisierul criptat
+    result = file_service.store_encrypted_file(encrypted_content, file_name)
+    
+    if not result['success']:
+        return jsonify({'error': result['error']}), 400
+    
+    # Determinam tipul fisierului
+    file_type = MessageAttachment.get_file_type_from_name(file_name)
+    file_icon = MessageAttachment.get_file_icon_from_name(file_name)
+    
+    return jsonify({
+        'success': True,
+        'file_info': {
+            'temp_id': result['temp_id'],
+            'name': file_name,
+            'size': file_size,
+            'mime_type': mime_type,
+            'file_type': file_type,
+            'file_icon': file_icon,
+            'encrypted_path': result['encrypted_path'],
+            'encrypted_aes_keys': encrypted_aes_keys,
+            'iv': iv
+        }
+    }), 201
+
+
 @file_bp.route('/send/<int:conversation_id>', methods=['POST'])
 @login_required
 def send_message_with_files(conversation_id):

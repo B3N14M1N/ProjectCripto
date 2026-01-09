@@ -132,6 +132,35 @@ def get_conversation(conversation_id):
     })
 
 
+@chat_bp.route('/conversations/<int:conversation_id>/public-keys', methods=['GET'])
+@login_required
+def get_conversation_public_keys(conversation_id):
+    """
+    Obtine cheile publice ale tuturor participantilor pentru criptare client-side.
+    
+    Response:
+    {
+        "public_keys": {
+            "user_id_1": "-----BEGIN PUBLIC KEY-----...",
+            "user_id_2": "-----BEGIN PUBLIC KEY-----..."
+        }
+    }
+    """
+    user_id = get_current_user_id()
+    conversation = chat_service.get_conversation(conversation_id, user_id)
+    
+    if not conversation:
+        return jsonify({'error': 'Conversatie negasita sau acces interzis'}), 404
+    
+    # Obtinem cheile publice ale tuturor participantilor
+    participant_ids = [p.user_id for p in conversation.participants]
+    public_keys = auth_service.get_public_keys_for_users(participant_ids)
+    
+    return jsonify({
+        'public_keys': public_keys
+    })
+
+
 @chat_bp.route('/conversations/<int:conversation_id>', methods=['DELETE'])
 @login_required
 def delete_conversation(conversation_id):
@@ -246,6 +275,57 @@ def send_message(conversation_id):
         'success': True,
         'message': result['message'].to_dict_with_crypto_info(user_id),
         'crypto_details': result.get('crypto_details')
+    }), 201
+
+
+@chat_bp.route('/conversations/<int:conversation_id>/messages/encrypted', methods=['POST'])
+@login_required
+def send_encrypted_message(conversation_id):
+    """
+    Trimite un mesaj pre-criptat de client (End-to-End Encryption complet).
+    Serverul doar stocheaza datele criptate, nu are acces la continut.
+    
+    Request Body:
+    {
+        "encrypted_content": "base64...",
+        "iv": "base64...",
+        "encrypted_aes_keys": {"user_id_1": "base64...", "user_id_2": "..."},
+        "message_type": "text"
+    }
+    
+    Response:
+    {
+        "success": true,
+        "message": {...}
+    }
+    """
+    user_id = get_current_user_id()
+    data = request.get_json()
+    
+    encrypted_content = data.get('encrypted_content')
+    iv = data.get('iv')
+    encrypted_aes_keys = data.get('encrypted_aes_keys')
+    message_type = data.get('message_type', 'text')
+    
+    if not encrypted_content or not iv or not encrypted_aes_keys:
+        return jsonify({'error': 'Date criptate incomplete'}), 400
+    
+    result = chat_service.store_encrypted_message(
+        conversation_id,
+        user_id,
+        encrypted_content,
+        iv,
+        encrypted_aes_keys,
+        message_type
+    )
+    
+    if not result['success']:
+        return jsonify({'error': result['error']}), 400
+    
+    return jsonify({
+        'success': True,
+        'message': result['message'].to_dict(user_id),
+        'e2e': True  # Flag pentru a indica ca e E2E complet
     }), 201
 
 

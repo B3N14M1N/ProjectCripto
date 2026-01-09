@@ -183,6 +183,49 @@ class FileService:
         encrypted_filename = f"{temp_id}.enc"
         return {'success': self.delete_file(encrypted_filename)}
     
+    def store_encrypted_file(self, encrypted_content, file_name):
+        """
+        Stocheaza un fisier deja criptat pe client.
+        Serverul nu face decriptare/criptare - doar stocheaza datele.
+        
+        Args:
+            encrypted_content: Continutul criptat in format base64
+            file_name: Numele original al fisierului
+            
+        Returns:
+            dict: {
+                'success': bool,
+                'temp_id': ID-ul temporar pentru referinta,
+                'encrypted_path': Calea fisierului criptat,
+                'error': mesaj eroare sau None
+            }
+        """
+        try:
+            import base64
+            
+            # Generam ID unic pentru fisier
+            unique_id = str(uuid.uuid4())
+            encrypted_filename = f"{unique_id}.enc"
+            file_path = os.path.join(self.upload_folder, encrypted_filename)
+            
+            # Decodam din base64 si salvam direct (deja criptat)
+            encrypted_bytes = base64.b64decode(encrypted_content)
+            
+            with open(file_path, 'wb') as f:
+                f.write(encrypted_bytes)
+            
+            return {
+                'success': True,
+                'temp_id': unique_id,
+                'encrypted_path': encrypted_filename
+            }
+            
+        except Exception as e:
+            return {
+                'success': False,
+                'error': f'Eroare la stocarea fisierului criptat: {str(e)}'
+            }
+    
     def download_file(self, file_path, encrypted_aes_key, iv, private_key_pem):
         """
         Descarca si decripteaza un fisier.

@@ -320,6 +320,73 @@ class ChatService:
             db.session.rollback()
             return {'success': False, 'error': f'Eroare la trimiterea mesajului: {str(e)}'}
     
+    def store_encrypted_message(self, conversation_id, sender_id, encrypted_content, 
+                                 iv, encrypted_aes_keys, message_type='text'):
+        """
+        Stocheaza un mesaj pre-criptat de client (E2E complet).
+        Serverul nu face nicio operatie de criptare - doar stocheaza datele.
+        
+        Args:
+            conversation_id: ID conversatie
+            sender_id: ID expeditor
+            encrypted_content: Continut criptat cu AES (base64)
+            iv: Vector de initializare (base64)
+            encrypted_aes_keys: Dict {user_id: encrypted_key_base64}
+            message_type: 'text', 'image', sau 'file'
+            
+        Returns:
+            dict: {
+                'success': bool,
+                'message': Message sau None,
+                'error': mesaj eroare sau None
+            }
+        """
+        # Verificam accesul la conversatie
+        conversation = self.get_conversation(conversation_id, sender_id)
+        if not conversation:
+            return {'success': False, 'error': 'Conversatie negasita sau acces interzis'}
+        
+        # Verificam ca avem chei pentru toti participantii
+        participant_ids = [p.user_id for p in conversation.participants]
+        provided_keys = set(int(k) for k in encrypted_aes_keys.keys())
+        required_keys = set(participant_ids)
+        
+        if not required_keys.issubset(provided_keys):
+            missing = required_keys - provided_keys
+            return {'success': False, 'error': f'Lipsesc chei AES pentru participantii: {missing}'}
+        
+        try:
+            # Cream mesajul cu datele deja criptate
+            message = Message(
+                conversation_id=conversation_id,
+                sender_id=sender_id,
+                encrypted_content=encrypted_content,
+                encrypted_aes_keys=json.dumps(encrypted_aes_keys),
+                iv=iv,
+                message_type=message_type
+            )
+            
+            db.session.add(message)
+            
+            # Actualizam timestamp conversatie
+            conversation.update_timestamp()
+            
+            # Incrementam contorul de necitite pentru ceilalti participanti
+            for participant in conversation.participants:
+                if participant.user_id != sender_id:
+                    participant.increment_unread()
+            
+            db.session.commit()
+            
+            return {
+                'success': True,
+                'message': message
+            }
+            
+        except Exception as e:
+            db.session.rollback()
+            return {'success': False, 'error': f'Eroare la stocarea mesajului: {str(e)}'}
+    
     def get_messages(self, conversation_id, user_id, limit=50, before_id=None):
         """
         Obtine mesajele dintr-o conversatie.

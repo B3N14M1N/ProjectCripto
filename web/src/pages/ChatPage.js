@@ -121,12 +121,26 @@ function ChatPage() {
     }
   };
   
-  // Functie pentru trimiterea unui mesaj
+  // Functie pentru trimiterea unui mesaj - CRIPTARE CLIENT-SIDE (E2E)
   const sendMessage = async (content, messageType = 'text') => {
     if (!conversationId || !content.trim()) return;
     
     try {
-      const response = await chatAPI.sendMessage(conversationId, content, messageType);
+      // 1. Obtinem cheile publice ale participantilor
+      const keysResponse = await chatAPI.getConversationPublicKeys(conversationId);
+      const publicKeys = keysResponse.data.public_keys;
+      
+      // 2. Criptam mesajul pe client
+      const encryptedData = await cryptoClient.encryptMessage(content.trim(), publicKeys);
+      
+      // 3. Trimitem mesajul criptat la server
+      const response = await chatAPI.sendEncryptedMessage(conversationId, {
+        encrypted_content: encryptedData.encrypted_content,
+        iv: encryptedData.iv,
+        encrypted_aes_keys: encryptedData.encrypted_aes_keys,
+        message_type: messageType
+      });
+      
       if (response.data.success) {
         // Adaugam mesajul nou la lista
         setMessages(prev => [...prev, response.data.message]);

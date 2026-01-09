@@ -4,8 +4,35 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Message, FilesPreviewBar } from './Message';
-import { fileAPI } from '../services/api';
+import { fileAPI, chatAPI } from '../services/api';
+import { cryptoClient } from '../services/crypto';
 import './MessageArea.css';
+
+/**
+ * Citeste un fisier ca ArrayBuffer
+ */
+const readFileAsArrayBuffer = (file) => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsArrayBuffer(file);
+  });
+};
+
+/**
+ * Determina tipul fisierului bazat pe MIME type
+ */
+const getFileType = (mimeType) => {
+  if (!mimeType) return 'other';
+  if (mimeType.startsWith('image/')) return 'image';
+  if (mimeType.startsWith('video/')) return 'video';
+  if (mimeType.startsWith('audio/')) return 'audio';
+  if (['application/pdf', 'application/msword', 'text/plain'].some(t => mimeType.includes(t))) {
+    return 'document';
+  }
+  return 'other';
+};
 
 /**
  * Componenta pentru zona de mesaje din chat
@@ -71,15 +98,49 @@ const MessageArea = ({
     setIsSending(true);
     try {
       if (hasFiles) {
-        // 1. Uploadăm toate fișierele
-        const uploadResponse = await fileAPI.uploadFiles(conversation.id, selectedFiles);
-        
-        if (uploadResponse.data.success && uploadResponse.data.uploaded_files) {
-          // 2. Trimitem mesajul cu fișierele uploadate
-          await onSendWithFiles(inputText.trim(), uploadResponse.data.uploaded_files);
-        } else {
-          throw new Error('Upload failed');
+        // === CRIPTARE FISIERE PE CLIENT (E2E) ===
+        // 1. Obtinem cheile publice ale participantilor
+        const keysResponse = await chatAPI.getConversationPublicKeys(conversation.id);
+        if (!keysResponse.data.success) {
+          throw new Error('Nu s-au putut obtine cheile publice');
         }
+        const publicKeys = keysResponse.data.public_keys;
+        
+        // 2. Criptam si uploadam fiecare fisier
+        const uploadedFiles = [];
+        for (const file of selectedFiles) {
+          // Citim fisierul ca ArrayBuffer
+          const fileData = await readFileAsArrayBuffer(file);
+          
+          // Criptam fisierul cu cheile publice ale tuturor participantilor
+          const encryptedData = await cryptoClient.encryptFile(fileData, publicKeys);
+          
+          // Uploadam fisierul criptat
+          const uploadResponse = await fileAPI.uploadEncryptedFile(
+            conversation.id,
+            encryptedData,
+            { name: file.name, size: file.size, type: file.type }
+          );
+          
+          if (!uploadResponse.data.success) {
+            throw new Error(`Eroare la upload: ${file.name}`);
+          }
+          
+          // Pregatim datele pentru mesaj
+          uploadedFiles.push({
+            temp_id: uploadResponse.data.temp_id,
+            name: file.name,
+            size: file.size,
+            mime_type: file.type || 'application/octet-stream',
+            file_type: getFileType(file.type),
+            encrypted_path: uploadResponse.data.encrypted_path,
+            encrypted_aes_keys: encryptedData.encrypted_aes_keys,
+            iv: encryptedData.iv
+          });
+        }
+        
+        // 3. Trimitem mesajul cu fisierele uploadate
+        await onSendWithFiles(inputText.trim(), uploadedFiles);
       } else {
         // Doar text
         await onSendMessage(inputText.trim());

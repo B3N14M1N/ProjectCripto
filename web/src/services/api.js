@@ -88,6 +88,14 @@ export const chatAPI = {
   sendMessage: (conversationId, content, messageType = 'text') =>
     api.post(`/conversations/${conversationId}/messages`, { content, message_type: messageType }),
   
+  // Trimite un mesaj pre-criptat de client (E2E complet)
+  sendEncryptedMessage: (conversationId, encryptedData) =>
+    api.post(`/conversations/${conversationId}/messages/encrypted`, encryptedData),
+  
+  // Obtine cheile publice ale participantilor unei conversatii
+  getConversationPublicKeys: (conversationId) =>
+    api.get(`/conversations/${conversationId}/public-keys`),
+  
   // Marcheaza conversatia ca citita
   markAsRead: (conversationId) => api.put(`/conversations/${conversationId}/read`),
   
@@ -105,7 +113,7 @@ export const chatAPI = {
 // ==================== FISIERE ====================
 
 export const fileAPI = {
-  // Uploadeaza fisiere (fara a trimite mesaj)
+  // Uploadeaza fisiere (fara a trimite mesaj) - criptare pe server (fallback)
   uploadFiles: (conversationId, files) => {
     const formData = new FormData();
     files.forEach(file => {
@@ -116,6 +124,17 @@ export const fileAPI = {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
   },
+  
+  // Uploadeaza un fisier pre-criptat de client (E2E complet)
+  uploadEncryptedFile: (conversationId, encryptedData, fileInfo) =>
+    api.post(`/files/upload-encrypted/${conversationId}`, {
+      encrypted_content: encryptedData.encrypted_content,
+      iv: encryptedData.iv,
+      encrypted_aes_keys: encryptedData.encrypted_aes_keys,
+      file_name: fileInfo.name,
+      file_size: fileInfo.size,
+      mime_type: fileInfo.type || 'application/octet-stream'
+    }),
   
   // Trimite mesaj cu fisiere atasate
   sendWithFiles: (conversationId, content, attachments) =>

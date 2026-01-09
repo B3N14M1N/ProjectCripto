@@ -1,18 +1,23 @@
 // src/services/crypto.js
 // Serviciu pentru operatii criptografice pe client
-// Implementeaza decriptarea End-to-End folosind Web Crypto API
-// Serverul nu are acces la datele decriptate
+// Implementeaza criptarea si decriptarea End-to-End folosind Web Crypto API
+// Serverul nu are acces la datele necriptate - este doar punct de transmisie
 
 /**
- * Decripteaza mesaje si fisiere folosind Web Crypto API
+ * Cripteaza si decripteaza mesaje si fisiere folosind Web Crypto API
  * 
- * Procesul:
+ * CRIPTARE (client -> server):
+ * 1. Genereaza cheie AES aleatorie (256 biti)
+ * 2. Cripteaza continutul cu AES-CBC
+ * 3. Cripteaza cheia AES cu RSA pentru fiecare destinatar
+ * 4. Trimite la server: continut_criptat + chei_AES_criptate + IV
+ * 
+ * DECRIPTARE (server -> client):
  * 1. Importa cheia privata RSA din format PEM
  * 2. Decripteaza cheia AES cu RSA-OAEP
  * 3. Decripteaza continutul cu AES-CBC
  * 
- * Aceasta implementare asigura End-to-End Encryption (E2E) -
- * serverul nu poate decripta mesajele, doar clientul cu cheia privata.
+ * Serverul nu poate decripta mesajele - E2E complet.
  */
 
 // Converteste string PEM la ArrayBuffer
@@ -42,22 +47,58 @@ function base64ToArrayBuffer(base64) {
   return bytes.buffer;
 }
 
+// Converteste ArrayBuffer la base64
+function arrayBufferToBase64(buffer) {
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  for (let i = 0; i < bytes.byteLength; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return window.btoa(binary);
+}
+
 // Converteste ArrayBuffer la string
 function arrayBufferToString(buffer) {
   return new TextDecoder().decode(buffer);
 }
 
+// Converteste string la ArrayBuffer
+function stringToArrayBuffer(str) {
+  return new TextEncoder().encode(str);
+}
+
 /**
  * Clasa pentru operatii criptografice client-side (E2E)
  * 
- * Implementeaza decriptarea completa pe client:
- * - RSA-OAEP pentru decriptarea cheii AES
- * - AES-256-CBC pentru decriptarea continutului
- * Serverul nu are acces la datele decriptate.
+ * Implementeaza criptarea si decriptarea completa pe client:
+ * - RSA-OAEP pentru criptarea/decriptarea cheii AES
+ * - AES-256-CBC pentru criptarea/decriptarea continutului
+ * Serverul nu are acces la datele necriptate - doar transmite.
  */
 export class CryptoClient {
+  
+  // ==================== IMPORT CHEI ====================
+  
   /**
-   * Importa o cheie privata RSA din format PEM
+   * Importa o cheie publica RSA din format PEM (pentru criptare)
+   */
+  async importPublicKey(pemKey) {
+    const keyData = pemToArrayBuffer(pemKey);
+    
+    return await window.crypto.subtle.importKey(
+      'spki',
+      keyData,
+      {
+        name: 'RSA-OAEP',
+        hash: 'SHA-256',
+      },
+      false,
+      ['encrypt']
+    );
+  }
+  
+  /**
+   * Importa o cheie privata RSA din format PEM (pentru decriptare)
    */
   async importPrivateKey(pemKey) {
     const keyData = pemToArrayBuffer(pemKey);
@@ -75,6 +116,160 @@ export class CryptoClient {
   }
   
   /**
+   * Importa o cheie AES din bytes (pentru decriptare)
+   */
+  async importAESKey(keyBytes, usage = ['decrypt']) {
+    return await window.crypto.subtle.importKey(
+      'raw',
+      keyBytes,
+      { name: 'AES-CBC' },
+      false,
+      usage
+    );
+  }
+  
+  // ==================== GENERARE CHEI ====================
+  
+  /**
+   * Genereaza o cheie AES-256 aleatorie
+   */
+  async generateAESKey() {
+    return await window.crypto.subtle.generateKey(
+      { name: 'AES-CBC', length: 256 },
+      true, // extractable - necesar pentru a exporta cheia
+      ['encrypt', 'decrypt']
+    );
+  }
+  
+  /**
+   * Genereaza un IV aleatoriu (16 bytes pentru AES-CBC)
+   */
+  generateIV() {
+    return window.crypto.getRandomValues(new Uint8Array(16));
+  }
+  
+  // ==================== CRIPTARE ====================
+  
+  /**
+   * Cripteaza date cu RSA-OAEP
+   */
+  async encryptRSA(data, publicKey) {
+    const encrypted = await window.crypto.subtle.encrypt(
+      { name: 'RSA-OAEP' },
+      publicKey,
+      data
+    );
+    return arrayBufferToBase64(encrypted);
+  }
+  
+  /**
+   * Cripteaza date cu AES-CBC
+   */
+  async encryptAES(plaintext, key, iv) {
+    const data = typeof plaintext === 'string' 
+      ? stringToArrayBuffer(plaintext) 
+      : plaintext;
+    
+    const encrypted = await window.crypto.subtle.encrypt(
+      { name: 'AES-CBC', iv: iv },
+      key,
+      data
+    );
+    
+    return arrayBufferToBase64(encrypted);
+  }
+  
+  /**
+   * Exporta cheia AES ca bytes (pentru a o cripta cu RSA)
+   */
+  async exportAESKey(key) {
+    const exported = await window.crypto.subtle.exportKey('raw', key);
+    return new Uint8Array(exported);
+  }
+  
+  /**
+   * Cripteaza un mesaj complet pentru mai multi destinatari (E2E)
+   * 
+   * @param {string} content - Continutul mesajului in clar
+   * @param {Object} recipientPublicKeys - Dict {userId: publicKeyPEM}
+   * @returns {Object} - {encrypted_content, iv, encrypted_aes_keys}
+   */
+  async encryptMessage(content, recipientPublicKeys) {
+    try {
+      // 1. Generam cheie AES aleatorie pentru acest mesaj
+      const aesKey = await this.generateAESKey();
+      
+      // 2. Generam IV aleatoriu
+      const iv = this.generateIV();
+      
+      // 3. Criptam continutul cu AES
+      const encryptedContent = await this.encryptAES(content, aesKey, iv);
+      
+      // 4. Exportam cheia AES pentru a o cripta cu RSA
+      const aesKeyBytes = await this.exportAESKey(aesKey);
+      
+      // 5. Criptam cheia AES cu RSA pentru fiecare destinatar
+      const encryptedAESKeys = {};
+      for (const [userId, publicKeyPEM] of Object.entries(recipientPublicKeys)) {
+        const publicKey = await this.importPublicKey(publicKeyPEM);
+        const encryptedKey = await this.encryptRSA(aesKeyBytes, publicKey);
+        encryptedAESKeys[userId] = encryptedKey;
+      }
+      
+      return {
+        encrypted_content: encryptedContent,
+        iv: arrayBufferToBase64(iv),
+        encrypted_aes_keys: encryptedAESKeys
+      };
+    } catch (error) {
+      console.error('Eroare la criptare client-side:', error);
+      throw new Error('Criptarea a esuat: ' + error.message);
+    }
+  }
+  
+  /**
+   * Cripteaza un fisier pentru mai multi destinatari (E2E)
+   * 
+   * @param {ArrayBuffer} fileData - Continutul fisierului
+   * @param {Object} recipientPublicKeys - Dict {userId: publicKeyPEM}
+   * @returns {Object} - {encrypted_content, iv, encrypted_aes_keys}
+   */
+  async encryptFile(fileData, recipientPublicKeys) {
+    try {
+      // 1. Generam cheie AES aleatorie pentru acest fisier
+      const aesKey = await this.generateAESKey();
+      
+      // 2. Generam IV aleatoriu
+      const iv = this.generateIV();
+      
+      // 3. Criptam fisierul cu AES
+      const encryptedContent = await this.encryptAES(fileData, aesKey, iv);
+      
+      // 4. Exportam cheia AES pentru a o cripta cu RSA
+      const aesKeyBytes = await this.exportAESKey(aesKey);
+      
+      // 5. Criptam cheia AES cu RSA pentru fiecare destinatar
+      const encryptedAESKeys = {};
+      for (const [userId, publicKeyPEM] of Object.entries(recipientPublicKeys)) {
+        const publicKey = await this.importPublicKey(publicKeyPEM);
+        const encryptedKey = await this.encryptRSA(aesKeyBytes, publicKey);
+        encryptedAESKeys[userId] = encryptedKey;
+      }
+      
+      return {
+        encrypted_content: encryptedContent,
+        iv: arrayBufferToBase64(iv),
+        encrypted_aes_keys: encryptedAESKeys
+      };
+    } catch (error) {
+      console.error('Eroare la criptare fisier client-side:', error);
+      throw new Error('Criptarea fisierului a esuat: ' + error.message);
+    }
+  }
+  
+  // ==================== DECRIPTARE ====================
+  
+  /**
    * Decripteaza date cu RSA-OAEP
    */
   async decryptRSA(encryptedData, privateKey) {
@@ -90,20 +285,7 @@ export class CryptoClient {
   }
   
   /**
-   * Importa o cheie AES din bytes
-   */
-  async importAESKey(keyBytes) {
-    return await window.crypto.subtle.importKey(
-      'raw',
-      keyBytes,
-      { name: 'AES-CBC' },
-      false,
-      ['decrypt']
-    );
-  }
-  
-  /**
-   * Decripteaza date cu AES-CBC
+   * Decripteaza date cu AES-CBC (returneaza string)
    */
   async decryptAES(encryptedData, key, iv) {
     const encryptedBuffer = base64ToArrayBuffer(encryptedData);

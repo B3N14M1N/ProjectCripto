@@ -24,14 +24,17 @@
 
 ### 1.1 Scopul Proiectului
 
-SecureChat este o aplicație de mesagerie instantanee care demonstrează implementarea practică a criptării end-to-end folosind algoritmii **AES (Advanced Encryption Standard)** și **RSA (Rivest-Shamir-Adleman)**. Proiectul a fost dezvoltat în scop educațional pentru a ilustra modul în care acești algoritmi criptografici sunt utilizați în aplicațiile moderne de comunicare securizată.
+SecureChat este o aplicație de mesagerie instantanee care demonstrează implementarea practică a criptării **end-to-end complete** folosind algoritmii **AES (Advanced Encryption Standard)** și **RSA (Rivest-Shamir-Adleman)**. Proiectul a fost dezvoltat în scop educațional pentru a ilustra modul în care acești algoritmi criptografici sunt utilizați în aplicațiile moderne de comunicare securizată.
+
+**Caracteristica principală**: Atât criptarea cât și decriptarea se realizează exclusiv în browser-ul utilizatorului folosind **Web Crypto API**. Serverul acționează doar ca punct de transmisie și stocare pentru datele deja criptate, fără posibilitatea de a le citi.
 
 ### 1.2 Obiective
 
 - Demonstrarea practică a criptării simetrice (AES-256-CBC)
 - Demonstrarea practică a criptării asimetrice (RSA-2048)
 - Implementarea unei scheme hibride de criptare
-- Transfer securizat de fișiere cu criptare
+- **Criptare completă pe client** - serverul nu poate citi mesajele
+- Transfer securizat de fișiere cu criptare end-to-end
 - Persistența securizată a mesajelor
 - Interfață educațională cu explicații vizuale ale procesului criptografic
 
@@ -42,7 +45,8 @@ SecureChat este o aplicație de mesagerie instantanee care demonstrează impleme
 | Backend | Flask | 3.0.0 |
 | Frontend | React | 18.2.0 |
 | Bază de Date | SQLite + SQLAlchemy | 2.0.23 |
-| Criptografie | cryptography (Python) | 41.0.7 |
+| Criptografie Client | Web Crypto API | Browser native |
+| Criptografie Server | cryptography (Python) | 41.0.7 |
 | Containerizare | Docker | 20.10+ |
 | HTTP Client | Axios | 1.6.2 |
 
@@ -59,15 +63,16 @@ SecureChat este o aplicație de mesagerie instantanee care demonstrează impleme
 │  ┌───────────┐  ┌───────────────┐  ┌──────────────────────────┐│
 │  │  Pagini   │  │  Componente   │  │      Servicii            ││
 │  │ - Login   │  │ - Sidebar     │  │ - api.js (HTTP Client)   ││
-│  │ - Register│  │ - MessageArea │  │ - Gestionare sesiune     ││
-│  │ - Chat    │  │ - Message     │  │                          ││
-│  │           │  │ - CryptoInfo  │  │                          ││
+│  │ - Register│  │ - MessageArea │  │ - crypto.js (E2E Crypto) ││
+│  │ - Chat    │  │ - Message     │  │   * Web Crypto API       ││
+│  │           │  │ - CryptoInfo  │  │   * AES-256-CBC encrypt  ││
+│  │           │  │               │  │   * RSA-2048 key wrap    ││
 │  └───────────┘  └───────────────┘  └──────────────────────────┘│
 └────────────────────────────┬────────────────────────────────────┘
-                             │ HTTP/REST API
+                             │ HTTP/REST API (date criptate)
                              ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                       SERVER (Flask)                            │
+│                  SERVER (Flask) - Doar stocare                  │
 ├─────────────────────────────────────────────────────────────────┤
 │  ┌────────────────────────────────────────────────────────────┐ │
 │  │                      API Routes                            │ │
@@ -76,7 +81,8 @@ SecureChat este o aplicație de mesagerie instantanee care demonstrează impleme
 │                          │                                      │
 │  ┌────────────────────────────────────────────────────────────┐ │
 │  │                    Service Layer                           │ │
-│  │  AuthService  ChatService  CryptoService  FileService      │ │
+│  │  AuthService  ChatService  CryptoService*  FileService     │ │
+│  │  (*CryptoService - doar fallback, nu pentru E2E)           │ │
 │  └───────────────────────┬────────────────────────────────────┘ │
 │                          │                                      │
 │  ┌────────────────────────────────────────────────────────────┐ │
@@ -639,11 +645,11 @@ Utilizatorul poate configura cheia privată din:
 
 ## 7. Fluxul de Mesagerie
 
-### 7.1 Trimiterea unui Mesaj Text
+### 7.1 Trimiterea unui Mesaj Text (Client-Side E2E Encryption)
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                 FLUX TRIMITERE MESAJ                            │
+│            FLUX TRIMITERE MESAJ (CLIENT-SIDE E2E)               │
 └─────────────────────────────────────────────────────────────────┘
 
                        Alice (Sender)
@@ -654,9 +660,37 @@ Utilizatorul poate configura cheia privată din:
         └───────────────────┬───────────────────┘
                             │
                             ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    CLIENT (Browser)                             │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  2. Obține cheile publice ale participanților                   │
+│     GET /api/conversations/{id}/public-keys                     │
+│     public_keys = {alice_id: key1, bob_id: key2}                │
+│                                                                  │
+│  3. Generează cheie AES aleatorie (Web Crypto API)              │
+│     aes_key = crypto.subtle.generateKey(AES-CBC, 256)           │
+│                                                                  │
+│  4. Generează IV aleatoriu                                      │
+│     iv = crypto.getRandomValues(new Uint8Array(16))             │
+│                                                                  │
+│  5. Criptează conținutul cu AES-256-CBC                         │
+│     encrypted = crypto.subtle.encrypt(AES-CBC, content, iv)     │
+│                                                                  │
+│  6. Criptează cheia AES pentru fiecare participant (RSA-OAEP)   │
+│     encrypted_keys = {                                          │
+│       alice_id: RSA_Encrypt(aes_key, alice_public_key),         │
+│       bob_id: RSA_Encrypt(aes_key, bob_public_key)              │
+│     }                                                           │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+                            │
+                            ▼
         ┌───────────────────────────────────────┐
-        │ 2. POST /api/conversations/{id}/messages
-        │    {content: "Hello Bob!"}            │
+        │ 7. POST /api/conversations/{id}/      │
+        │    messages/encrypted                 │
+        │    {encrypted_content, iv,            │
+        │     encrypted_aes_keys}               │
         └───────────────────┬───────────────────┘
                             │
                             ▼
@@ -664,28 +698,10 @@ Utilizatorul poate configura cheia privată din:
 │                         SERVER                                   │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                  │
-│  3. Obține participanții conversației                           │
-│     participants = [alice, bob]                                 │
+│  8. Serverul primește datele DEJA CRIPTATE                      │
+│     Nu poate citi conținutul mesajului!                         │
 │                                                                  │
-│  4. Obține cheile publice                                       │
-│     public_keys = {alice_id: key1, bob_id: key2}                │
-│                                                                  │
-│  5. Generează cheie AES aleatorie                               │
-│     aes_key = random_bytes(32)                                  │
-│                                                                  │
-│  6. Generează IV aleatoriu                                      │
-│     iv = random_bytes(16)                                       │
-│                                                                  │
-│  7. Criptează conținutul cu AES-256-CBC                         │
-│     encrypted = AES_CBC(content, aes_key, iv)                   │
-│                                                                  │
-│  8. Criptează cheia AES pentru fiecare participant              │
-│     encrypted_keys = {                                          │
-│       alice_id: RSA(aes_key, alice_public_key),                │
-│       bob_id: RSA(aes_key, bob_public_key)                     │
-│     }                                                           │
-│                                                                  │
-│  9. Salvează în baza de date                                    │
+│  9. Salvează direct în baza de date                             │
 │     Message(encrypted_content, iv, encrypted_keys)              │
 │                                                                  │
 └─────────────────────────────────────────────────────────────────┘
@@ -694,6 +710,9 @@ Utilizatorul poate configura cheia privată din:
         ┌───────────────────────────────────────┐
         │ 10. Response: mesaj creat cu succes   │
         └───────────────────────────────────────┘
+
+⚠️  IMPORTANT: Serverul NU vede niciodată mesajul în clar!
+    Criptarea ȘI decriptarea se fac exclusiv în browser.
 ```
 
 ### 7.2 Citirea și Decriptarea unui Mesaj (Client-Side - E2E)
@@ -805,61 +824,101 @@ Utilizatorul poate gestiona cheia privată din interfața de chat:
 
 ## 8. Gestionarea Fișierelor
 
-### 8.1 Upload Fișiere Multiple
+### 8.1 Upload Fișiere Multiple (Client-Side E2E Encryption)
 
-Aplicația suportă upload de fișiere multiple într-un singur mesaj:
+Aplicația suportă upload de fișiere multiple într-un singur mesaj cu criptare completă pe client:
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                 FLUX UPLOAD FIȘIERE                             │
+│           FLUX UPLOAD FIȘIERE (CLIENT-SIDE E2E)                 │
 └─────────────────────────────────────────────────────────────────┘
 
   1. Utilizator selectează unul sau mai multe fișiere
             │
             ▼
-  2. POST /api/files/upload/{conversation_id}
-     - FormData cu fișierele
+  ┌─────────────────────────────────────────────────────────────┐
+  │                    CLIENT (Browser)                          │
+  ├─────────────────────────────────────────────────────────────┤
+  │                                                              │
+  │  2. Obține cheile publice ale participanților               │
+  │     GET /api/conversations/{id}/public-keys                 │
+  │                                                              │
+  │  3. Pentru fiecare fișier:                                  │
+  │     a. Citește fișierul ca ArrayBuffer (FileReader API)     │
+  │     b. Generează cheie AES aleatorie (Web Crypto API)       │
+  │     c. Generează IV aleatoriu                               │
+  │     d. Criptează conținutul cu AES-256-CBC                  │
+  │     e. Criptează cheia AES cu RSA pentru fiecare participant│
+  │     f. Codifică datele criptate în Base64                   │
+  │                                                              │
+  │  4. POST /api/files/upload-encrypted/{conversation_id}      │
+  │     {encrypted_content, iv, encrypted_aes_keys, file_info}  │
+  │                                                              │
+  └─────────────────────────────────────────────────────────────┘
             │
             ▼
   ┌─────────────────────────────────────────────────────────────┐
   │                       SERVER                                 │
   ├─────────────────────────────────────────────────────────────┤
   │                                                              │
-  │  3. Pentru fiecare fișier:                                  │
-  │     a. Validare dimensiune (max 16MB)                       │
-  │     b. Generare cheie AES unică                             │
-  │     c. Criptare conținut cu AES-256-CBC                     │
-  │     d. Salvare fișier criptat: /uploads/{uuid}.enc          │
-  │     e. Criptare cheie AES pentru participanți               │
+  │  5. Serverul primește fișierul DEJA CRIPTAT                 │
+  │     Nu poate citi conținutul!                               │
   │                                                              │
-  │  4. Returnare informații fișiere temporare                  │
-  │     [{temp_id, name, size, encrypted_path, ...}]            │
+  │  6. Salvare directă: /uploads/{uuid}.enc                    │
+  │     Fără decriptare/re-criptare                             │
+  │                                                              │
+  │  7. Returnare informații fișiere temporare                  │
+  │     {temp_id, encrypted_path}                               │
   │                                                              │
   └─────────────────────────────────────────────────────────────┘
             │
             ▼
-  3. POST /api/files/send/{conversation_id}
+  8. POST /api/files/send/{conversation_id}
      - content: "Textul mesajului (opțional)"
-     - attachments: [informații fișiere]
+     - attachments: [informații fișiere cu iv, encrypted_aes_keys]
             │
             ▼
-  4. Creare mesaj cu atașamente în DB
+  9. Creare mesaj cu atașamente în DB
+
+⚠️  IMPORTANT: Serverul NU vede niciodată fișierele în clar!
+    Criptarea ȘI decriptarea se fac exclusiv în browser.
 ```
 
-### 8.2 Download Fișier Criptat
+### 8.2 Download și Decriptare Fișier (Client-Side E2E)
 
-```python
-def download_attachment(attachment_id: int, private_key: str):
-    """
-    Decriptează și returnează un fișier atașat.
-    
-    1. Obține atașamentul din DB
-    2. Citește fișierul criptat de pe disk
-    3. Extrage cheia AES criptată pentru utilizator
-    4. Decriptează cheia AES cu RSA (cheia privată)
-    5. Decriptează fișierul cu AES
-    6. Returnează fișierul decriptat
-    """
+Fișierele sunt descărcate criptate și decriptate în browser:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│          FLUX DOWNLOAD FIȘIER (CLIENT-SIDE E2E)                 │
+└─────────────────────────────────────────────────────────────────┘
+
+  1. Click pe fișier atașat
+            │
+            ▼
+  2. GET /api/files/meta/{attachment_id}
+     Primește: encrypted_aes_key, iv
+            │
+            ▼
+  3. GET /api/files/encrypted/{attachment_id}
+     Primește: conținut criptat (binary)
+            │
+            ▼
+  ┌─────────────────────────────────────────────────────────────┐
+  │                    CLIENT (Browser)                          │
+  ├─────────────────────────────────────────────────────────────┤
+  │                                                              │
+  │  4. Obține cheia privată din localStorage                   │
+  │                                                              │
+  │  5. Decriptează cheia AES cu RSA-OAEP (Web Crypto API)      │
+  │     aes_key = RSA_Decrypt(encrypted_aes_key, private_key)   │
+  │                                                              │
+  │  6. Decriptează fișierul cu AES-256-CBC                     │
+  │     file_content = AES_Decrypt(encrypted_content, aes_key)  │
+  │                                                              │
+  │  7. Creează Blob și descarcă sau afișează fișierul          │
+  │                                                              │
+  └─────────────────────────────────────────────────────────────┘
 ```
 
 ### 8.3 Tipuri de Fișiere Suportate
