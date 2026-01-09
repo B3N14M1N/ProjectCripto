@@ -696,11 +696,11 @@ Utilizatorul poate configura cheia privată din:
         └───────────────────────────────────────┘
 ```
 
-### 7.2 Citirea și Decriptarea unui Mesaj
+### 7.2 Citirea și Decriptarea unui Mesaj (Client-Side - E2E)
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                   FLUX DECRIPTARE MESAJ                         │
+│                   FLUX DECRIPTARE MESAJ (CLIENT-SIDE)           │
 └─────────────────────────────────────────────────────────────────┘
 
                          Bob (Reader)
@@ -714,41 +714,92 @@ Utilizatorul poate configura cheia privată din:
         ┌───────────────────────────────────────┐
         │ 2. Primește mesaje criptate           │
         │    [{encrypted_content, iv,           │
-        │      encrypted_aes_keys}]             │
-        └───────────────────┬───────────────────┘
-                            │
-                            ▼
-        ┌───────────────────────────────────────┐
-        │ 3. Click buton "Decriptează"          │
-        │    POST /api/messages/{id}/decrypt    │
-        │    {private_key: "-----BEGIN..."}     │
+        │      encrypted_aes_key}]              │
+        │    (encrypted_aes_key pentru Bob)     │
         └───────────────────┬───────────────────┘
                             │
                             ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                         SERVER                                   │
+│                    CLIENT (Browser)                             │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                  │
-│  4. Extrage cheia AES criptată pentru Bob                       │
-│     encrypted_aes = message.encrypted_aes_keys[bob_id]          │
+│  3. Utilizatorul are cheia privată în localStorage              │
+│     private_key = localStorage.get('privateKey_bob')            │
 │                                                                  │
-│  5. Decriptează cheia AES cu RSA                                │
-│     aes_key = RSA_Decrypt(encrypted_aes, bob_private_key)       │
+│  4. Decriptează cheia AES cu RSA (Web Crypto API)               │
+│     aes_key = RSA_Decrypt(encrypted_aes_key, private_key)       │
 │                                                                  │
-│  6. Decriptează conținutul cu AES                               │
+│  5. Importă cheia AES                                           │
+│     aes_key_crypto = crypto.subtle.importKey(aes_key)           │
+│                                                                  │
+│  6. Decriptează conținutul cu AES-CBC (Web Crypto API)          │
 │     content = AES_Decrypt(encrypted_content, aes_key, iv)       │
 │                                                                  │
-│  7. Returnează mesajul decriptat                                │
-│     {decrypted_content: "Hello Bob!"}                           │
+│  7. Afișează mesajul decriptat în UI                            │
+│     "Hello Bob!"                                                │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+
+⚠️  IMPORTANT: Serverul NU vede niciodată mesajul decriptat!
+    Decriptarea se face exclusiv în browser-ul destinatarului.
+```
+
+### 7.3 Decriptare Fișiere (Client-Side - E2E)
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│               FLUX DECRIPTARE FIȘIER (CLIENT-SIDE)              │
+└─────────────────────────────────────────────────────────────────┘
+
+                         Bob (Reader)
+                            │
+                            ▼
+        ┌───────────────────────────────────────┐
+        │ 1. GET /api/files/meta/{attachment_id}│
+        │    Obține: encrypted_aes_key, iv      │
+        └───────────────────┬───────────────────┘
+                            │
+                            ▼
+        ┌───────────────────────────────────────┐
+        │ 2. GET /api/files/encrypted/{id}      │
+        │    Descarcă fișierul criptat (bytes)  │
+        └───────────────────┬───────────────────┘
+                            │
+                            ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    CLIENT (Browser)                             │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  3. Decriptează cheia AES cu RSA (Web Crypto API)               │
+│     aes_key = RSA_Decrypt(encrypted_aes_key, private_key)       │
+│                                                                  │
+│  4. Decriptează fișierul cu AES-CBC                             │
+│     file_data = AES_Decrypt(encrypted_file, aes_key, iv)        │
+│                                                                  │
+│  5. Creează Blob și trigger download                            │
+│     blob = new Blob([file_data], {type: mime_type})             │
+│     download(blob, filename)                                    │
 │                                                                  │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-### 7.3 Auto-Decriptare
+### 7.4 Auto-Decriptare
 
-Dacă utilizatorul are cheia privată configurată în browser, mesajele sunt decriptate automat la încărcarea conversației. Indicatori vizuali:
+Dacă utilizatorul are cheia privată configurată în browser (localStorage), mesajele sunt decriptate automat la încărcarea conversației folosind Web Crypto API. Indicatori vizuali:
 - 🔒 **Mesaj criptat** - cheia privată nu este configurată
-- ✓ **Mesaj vizibil** - decriptat cu succes
+- ✓ **Mesaj vizibil** - decriptat cu succes în browser
+
+### 7.5 Gestionarea Cheii Private
+
+Utilizatorul poate gestiona cheia privată din interfața de chat:
+
+1. **La înregistrare**: Se afișează automat un modal cu cheia privată generată
+2. **Descărcare**: Poate descărca cheia într-un fișier `.pem` pentru backup
+3. **Salvare automată**: Cheia este salvată în `localStorage` al browser-ului
+4. **Editare**: Din setări (buton cheie în sidebar), poate modifica cheia privată
+5. **Persistență**: Cheia rămâne salvată între sesiuni în același browser
+
+⚠️ **Atenție**: Pierderea cheii private = imposibilitatea decriptării mesajelor vechi!
 
 ---
 
@@ -972,7 +1023,9 @@ services:
 Aplicația SecureChat implementează:
 
 1. **Criptare End-to-End Completă**
-   - Mesajele sunt criptate pe server și decriptate doar de destinatari
+   - Mesajele sunt criptate pe server și **decriptate exclusiv pe client**
+   - Decriptarea se face în browser folosind Web Crypto API
+   - Serverul nu are acces la conținutul decriptat al mesajelor
    - Fiecare mesaj folosește o cheie AES unică
    - Cheile AES sunt criptate individual pentru fiecare participant
 
@@ -984,20 +1037,23 @@ Aplicația SecureChat implementează:
 3. **Gestionare Securizată a Fișierelor**
    - Upload multiple fișiere simultan
    - Criptare individuală per fișier
+   - **Decriptare fișiere pe client** (end-to-end)
    - Suport pentru orice tip de fișier
 
 4. **Interfață Intuitivă**
    - Design modern și responsive
    - Indicatori vizuali pentru starea criptării
-   - Opțiune de descărcare a cheii private
+   - Opțiune de descărcare a cheii private la înregistrare
+   - **Posibilitate de editare a cheii private** din setări
 
 ### 11.2 Aspecte de Securitate
 
 | Aspect | Implementare |
 |--------|--------------|
 | Criptare mesaje | AES-256-CBC + RSA-2048 |
+| Decriptare | **Exclusiv pe client (browser)** |
 | Stocare parole | Hash cu Werkzeug |
-| Cheia privată | Păstrată doar de utilizator |
+| Cheia privată | Păstrată doar de utilizator în localStorage |
 | Sesiuni | Flask session cu cookie securizat |
 | Transport | HTTPS recomandat în producție |
 
@@ -1006,9 +1062,9 @@ Aplicația SecureChat implementează:
 | Limitare Actuală | Îmbunătățire Propusă |
 |------------------|----------------------|
 | Polling pentru mesaje noi | WebSockets pentru timp real |
-| Decriptare pe server | Decriptare exclusiv pe client |
 | Fără PFS | Implementare Double Ratchet |
 | SQLite | PostgreSQL pentru scalabilitate |
+| Cheia privată în localStorage | Hardware security module sau WebAuthn |
 
 ### 11.4 Referințe
 
@@ -1058,9 +1114,11 @@ Aplicația SecureChat implementează:
 | `/api/conversations/{id}` | DELETE | Ștergere conversație |
 | `/api/conversations/{id}/messages` | GET | Mesaje conversație |
 | `/api/conversations/{id}/messages` | POST | Trimitere mesaj |
-| `/api/messages/{id}/decrypt` | POST | Decriptare mesaj |
+| `/api/messages/{id}/decrypt` | POST | Decriptare mesaj (fallback server) |
 | `/api/files/upload/{id}` | POST | Upload fișiere |
-| `/api/files/download/{id}` | POST | Download fișier |
+| `/api/files/download/{id}` | POST | Download fișier decriptat (fallback) |
+| `/api/files/encrypted/{id}` | GET | Download fișier criptat (E2E) |
+| `/api/files/meta/{id}` | GET | Metadate pentru decriptare client |
 
 ---
 

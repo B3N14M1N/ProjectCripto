@@ -121,7 +121,19 @@ export const fileAPI = {
   sendWithFiles: (conversationId, content, attachments) =>
     api.post(`/files/send/${conversationId}`, { content, attachments }),
   
-  // Descarca un atasament
+  // Descarca un atasament criptat (pentru decriptare pe client - E2E)
+  downloadEncrypted: async (attachmentId) => {
+    const response = await api.get(`/files/encrypted/${attachmentId}`, {
+      responseType: 'arraybuffer',
+    });
+    return response;
+  },
+  
+  // Obtine metadatele unui atasament (encrypted_aes_key, iv)
+  getAttachmentMeta: (attachmentId) =>
+    api.get(`/files/meta/${attachmentId}`),
+  
+  // Descarca un atasament (decriptare pe server - fallback)
   downloadAttachment: async (attachmentId, privateKey) => {
     const response = await api.post(`/files/download/${attachmentId}`, 
       { private_key: privateKey },

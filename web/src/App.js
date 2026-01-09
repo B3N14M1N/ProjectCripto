@@ -27,6 +27,8 @@ function App() {
   const [user, setUser] = useState(null);
   const [privateKey, setPrivateKey] = useState(null);
   const [loading, setLoading] = useState(true);
+  // Flag pentru a mentine utilizatorul pe pagina de inregistrare pana confirma cheia
+  const [registrationPending, setRegistrationPending] = useState(false);
   
   const navigate = useNavigate();
   
@@ -73,6 +75,8 @@ function App() {
   const register = async (username, email, password) => {
     const response = await authAPI.register(username, email, password);
     if (response.data.success) {
+      // Setam flag pentru a mentine utilizatorul pe pagina de inregistrare
+      setRegistrationPending(true);
       setUser(response.data.user);
       // Salvam cheia privata in localStorage
       if (response.data.private_key) {
@@ -82,6 +86,12 @@ function App() {
       // Nu navigam automat - lasam RegisterPage sa afiseze modalul cu cheia
     }
     return response.data;
+  };
+  
+  // Functie pentru a confirma ca utilizatorul a vazut cheia privata
+  const confirmRegistration = () => {
+    setRegistrationPending(false);
+    navigate('/chat');
   };
   
   // Functie pentru logout
@@ -121,6 +131,8 @@ function App() {
     logout,
     setPrivateKey: setUserPrivateKey,
     isAuthenticated: !!user,
+    confirmRegistration,
+    registrationPending,
   };
   
   return (
@@ -135,7 +147,11 @@ function App() {
         {/* Ruta pentru inregistrare */}
         <Route 
           path="/register" 
-          element={user ? <Navigate to="/chat" /> : <RegisterPage />} 
+          element={
+            user && !registrationPending 
+              ? <Navigate to="/chat" /> 
+              : <RegisterPage />
+          } 
         />
         
         {/* Ruta pentru chat - necesita autentificare */}

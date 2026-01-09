@@ -6,6 +6,7 @@ import React, { useState, useEffect, useContext, useRef, useCallback } from 'rea
 import { useParams, useNavigate } from 'react-router-dom';
 import { AuthContext } from '../App';
 import { chatAPI, authAPI, fileAPI } from '../services/api';
+import { cryptoClient } from '../services/crypto';
 import Sidebar from '../components/Sidebar';
 import MessageArea from '../components/MessageArea';
 import CryptoInfoPanel from '../components/CryptoInfoPanel';
@@ -35,6 +36,7 @@ function ChatPage() {
   const [showCryptoPanel, setShowCryptoPanel] = useState(false);
   const [showPrivateKeyModal, setShowPrivateKeyModal] = useState(false);
   const [tempPrivateKey, setTempPrivateKey] = useState('');
+  const [isEditingKey, setIsEditingKey] = useState(false);
   
   // Referinta pentru polling
   const pollingRef = useRef(null);
@@ -210,18 +212,35 @@ function ChatPage() {
     }
   };
   
-  // Functie pentru decriptarea unui mesaj
-  const decryptMessage = async (messageId) => {
-    if (!privateKey) {
+  // Functie pentru decriptarea unui mesaj - CLIENT-SIDE (End-to-End)
+  // userPrivateKey este pasat de componenta Message pentru compatibilitate,
+  // dar folosim privateKey din context pentru consistenta
+  const decryptMessage = async (messageId, userPrivateKey) => {
+    const keyToUse = userPrivateKey || privateKey;
+    
+    if (!keyToUse) {
       setShowPrivateKeyModal(true);
       return null;
     }
     
     try {
-      const response = await chatAPI.decryptMessage(messageId, privateKey);
-      return response.data.content;
+      // Gasim mesajul in lista de mesaje
+      const message = messages.find(m => m.id === messageId);
+      if (!message) {
+        throw new Error('Mesajul nu a fost gasit');
+      }
+      
+      // Decriptam pe client folosind Web Crypto API
+      const decryptedContent = await cryptoClient.decryptMessage(
+        message.encrypted_content,
+        message.encrypted_aes_key,
+        message.iv,
+        keyToUse
+      );
+      
+      return decryptedContent;
     } catch (error) {
-      console.error('Eroare la decriptare:', error);
+      console.error('Eroare la decriptare client-side:', error);
       throw error;
     }
   };
@@ -232,7 +251,27 @@ function ChatPage() {
       setPrivateKey(tempPrivateKey.trim());
       setShowPrivateKeyModal(false);
       setTempPrivateKey('');
+      setIsEditingKey(false);
     }
+  };
+  
+  // Handler pentru activarea modului de editare
+  const handleStartEditKey = () => {
+    setTempPrivateKey(privateKey || '');
+    setIsEditingKey(true);
+  };
+  
+  // Handler pentru anularea editarii
+  const handleCancelEditKey = () => {
+    setTempPrivateKey('');
+    setIsEditingKey(false);
+  };
+  
+  // Handler pentru inchiderea modalului
+  const handleCloseKeyModal = () => {
+    setShowPrivateKeyModal(false);
+    setTempPrivateKey('');
+    setIsEditingKey(false);
   };
   
   return (
@@ -275,13 +314,13 @@ function ChatPage() {
       
       {/* Modal pentru cheia privata */}
       {showPrivateKeyModal && (
-        <div className="modal-overlay" onClick={() => setShowPrivateKeyModal(false)}>
+        <div className="modal-overlay" onClick={handleCloseKeyModal}>
           <div className="modal" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
               <h3>Cheia Privata RSA</h3>
               <button 
                 className="btn-icon" 
-                onClick={() => setShowPrivateKeyModal(false)}
+                onClick={handleCloseKeyModal}
               >
                 ✕
               </button>
@@ -292,7 +331,7 @@ function ChatPage() {
                 Aceasta este pastrata doar in browser-ul tau.
               </p>
               
-              {privateKey ? (
+              {privateKey && !isEditingKey ? (
                 <div>
                   <p className="success-message" style={{marginBottom: '16px'}}>
                     ✓ Cheia privata este configurata
@@ -316,7 +355,9 @@ function ChatPage() {
                 </div>
               ) : (
                 <div className="input-group">
-                  <label className="input-label">Introdu cheia privata RSA:</label>
+                  <label className="input-label">
+                    {isEditingKey ? 'Editeaza cheia privata RSA:' : 'Introdu cheia privata RSA:'}
+                  </label>
                   <textarea
                     className="input private-key-textarea"
                     value={tempPrivateKey}
@@ -332,25 +373,43 @@ function ChatPage() {
                     }}
                   />
                   <p className="text-sm text-muted" style={{marginTop: '8px'}}>
-                    Ai primit cheia privata la inregistrare. 
-                    Daca ai pierdut-o, nu vei putea decripta mesajele vechi.
+                    {isEditingKey 
+                      ? 'Atentie: Modificarea cheii poate afecta decriptarea mesajelor vechi.' 
+                      : 'Ai primit cheia privata la inregistrare. Daca ai pierdut-o, nu vei putea decripta mesajele vechi.'}
                   </p>
                 </div>
               )}
             </div>
             <div className="modal-footer">
-              {!privateKey && (
+              {privateKey && !isEditingKey ? (
                 <button 
-                  className="btn btn-primary"
-                  onClick={handleSavePrivateKey}
-                  disabled={!tempPrivateKey.trim()}
+                  className="btn btn-secondary"
+                  onClick={handleStartEditKey}
                 >
-                  Salveaza cheia
+                  Modifica cheia
                 </button>
+              ) : (
+                <>
+                  <button 
+                    className="btn btn-primary"
+                    onClick={handleSavePrivateKey}
+                    disabled={!tempPrivateKey.trim()}
+                  >
+                    Salveaza cheia
+                  </button>
+                  {isEditingKey && (
+                    <button 
+                      className="btn btn-secondary"
+                      onClick={handleCancelEditKey}
+                    >
+                      Anuleaza
+                    </button>
+                  )}
+                </>
               )}
               <button 
                 className="btn btn-secondary"
-                onClick={() => setShowPrivateKeyModal(false)}
+                onClick={handleCloseKeyModal}
               >
                 Inchide
               </button>

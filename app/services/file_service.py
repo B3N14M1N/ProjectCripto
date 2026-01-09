@@ -226,6 +226,43 @@ class FileService:
         except Exception as e:
             return {'success': False, 'error': f'Eroare la decriptare fisier: {str(e)}'}
     
+    def get_encrypted_file(self, file_path):
+        """
+        Obtine continutul criptat al unui fisier (pentru decriptare client-side).
+        Nu face decriptare - clientul se ocupa de asta.
+        
+        Args:
+            file_path: Calea fisierului criptat
+            
+        Returns:
+            dict: {
+                'success': bool,
+                'data': continut criptat (bytes) sau None,
+                'error': mesaj eroare sau None
+            }
+        """
+        full_path = os.path.join(self.upload_folder, file_path)
+        
+        if not os.path.exists(full_path):
+            return {'success': False, 'error': 'Fisier negasit'}
+        
+        try:
+            # Citim fisierul criptat (este base64 encoded)
+            with open(full_path, 'r') as f:
+                encrypted_content_base64 = f.read()
+            
+            # Decodam din base64 pentru a obtine bytes-ii criptati
+            import base64
+            encrypted_bytes = base64.b64decode(encrypted_content_base64)
+            
+            return {
+                'success': True,
+                'data': encrypted_bytes
+            }
+            
+        except Exception as e:
+            return {'success': False, 'error': f'Eroare la citirea fisierului: {str(e)}'}
+    
     def delete_file(self, file_path):
         """
         Sterge un fisier din stocare.

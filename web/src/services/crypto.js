@@ -1,17 +1,18 @@
 // src/services/crypto.js
 // Serviciu pentru operatii criptografice pe client
-// Decriptarea mesajelor se face local pentru securitate maxima
+// Implementeaza decriptarea End-to-End folosind Web Crypto API
+// Serverul nu are acces la datele decriptate
 
 /**
- * Decripteaza un mesaj folosind Web Crypto API
+ * Decripteaza mesaje si fisiere folosind Web Crypto API
  * 
  * Procesul:
  * 1. Importa cheia privata RSA din format PEM
- * 2. Decripteaza cheia AES cu RSA
- * 3. Decripteaza mesajul cu AES
+ * 2. Decripteaza cheia AES cu RSA-OAEP
+ * 3. Decripteaza continutul cu AES-CBC
  * 
- * NOTA: In aceasta versiune simplificata, decriptarea se face pe server.
- * Aceasta clasa este pentru demonstratie sau viitoare implementare client-side.
+ * Aceasta implementare asigura End-to-End Encryption (E2E) -
+ * serverul nu poate decripta mesajele, doar clientul cu cheia privata.
  */
 
 // Converteste string PEM la ArrayBuffer
@@ -47,10 +48,12 @@ function arrayBufferToString(buffer) {
 }
 
 /**
- * Clasa pentru operatii criptografice client-side
+ * Clasa pentru operatii criptografice client-side (E2E)
  * 
- * Aceasta demonstreaza cum ar arata decriptarea pe client.
- * Pentru simplitate, aplicatia foloseste decriptare server-side.
+ * Implementeaza decriptarea completa pe client:
+ * - RSA-OAEP pentru decriptarea cheii AES
+ * - AES-256-CBC pentru decriptarea continutului
+ * Serverul nu are acces la datele decriptate.
  */
 export class CryptoClient {
   /**
@@ -119,6 +122,23 @@ export class CryptoClient {
   }
   
   /**
+   * Decripteaza date binare cu AES-CBC (pentru fisiere)
+   * Returneaza ArrayBuffer in loc de string
+   */
+  async decryptAESBinary(encryptedBuffer, key, ivBuffer) {
+    const decrypted = await window.crypto.subtle.decrypt(
+      {
+        name: 'AES-CBC',
+        iv: ivBuffer,
+      },
+      key,
+      encryptedBuffer
+    );
+    
+    return decrypted;
+  }
+  
+  /**
    * Decripteaza un mesaj complet (schema hibrida AES+RSA)
    */
   async decryptMessage(encryptedContent, encryptedAESKey, iv, privateKeyPEM) {
@@ -139,6 +159,37 @@ export class CryptoClient {
     } catch (error) {
       console.error('Eroare la decriptare client-side:', error);
       throw new Error('Decriptarea a esuat. Verificati cheia privata.');
+    }
+  }
+  
+  /**
+   * Decripteaza un fisier criptat (schema hibrida AES+RSA)
+   * 
+   * @param {ArrayBuffer} encryptedFileBuffer - Continutul criptat al fisierului
+   * @param {string} encryptedAESKey - Cheia AES criptata cu RSA (base64)
+   * @param {string} iv - Vector de initializare (base64)
+   * @param {string} privateKeyPEM - Cheia privata RSA in format PEM
+   * @returns {ArrayBuffer} - Continutul decriptat al fisierului
+   */
+  async decryptFile(encryptedFileBuffer, encryptedAESKey, iv, privateKeyPEM) {
+    try {
+      // 1. Importam cheia privata RSA
+      const privateKey = await this.importPrivateKey(privateKeyPEM);
+      
+      // 2. Decriptam cheia AES cu RSA
+      const aesKeyBytes = await this.decryptRSA(encryptedAESKey, privateKey);
+      
+      // 3. Importam cheia AES
+      const aesKey = await this.importAESKey(aesKeyBytes);
+      
+      // 4. Decriptam fisierul cu AES
+      const ivBuffer = base64ToArrayBuffer(iv);
+      const decrypted = await this.decryptAESBinary(encryptedFileBuffer, aesKey, ivBuffer);
+      
+      return decrypted;
+    } catch (error) {
+      console.error('Eroare la decriptare fisier client-side:', error);
+      throw new Error('Decriptarea fisierului a esuat. Verificati cheia privata.');
     }
   }
 }

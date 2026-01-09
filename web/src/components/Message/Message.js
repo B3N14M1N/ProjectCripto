@@ -3,6 +3,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { fileAPI } from '../../services/api';
+import { cryptoClient } from '../../services/crypto';
 import { isImage } from '../../utils/fileUtils';
 import FileAttachmentItem from './FileAttachmentItem';
 import ImageAttachmentItem from './ImageAttachmentItem';
@@ -67,7 +68,7 @@ const Message = ({ message, isOwn, privateKey, onDecrypt, decryptedContent, onSh
     }
   };
 
-  // Handler download fișier
+  // Handler download fișier - CLIENT-SIDE DECRYPTION (E2E)
   const handleDownload = async (attachment) => {
     if (!privateKey) {
       alert('Nu ai cheia privată pentru a decripta fișierul');
@@ -76,40 +77,66 @@ const Message = ({ message, isOwn, privateKey, onDecrypt, decryptedContent, onSh
 
     setDownloadingFile(attachment.id);
     try {
-      const response = await fileAPI.downloadAttachment(attachment.id, privateKey);
+      // 1. Obtinem metadatele (cheia AES criptata, IV)
+      const metaResponse = await fileAPI.getAttachmentMeta(attachment.id);
+      const { encrypted_aes_key, iv, file_name, file_mime_type } = metaResponse.data;
       
-      const contentDisposition = response.headers['content-disposition'];
-      let filename = attachment.file_name || 'file';
-      if (contentDisposition) {
-        const match = contentDisposition.match(/filename="?(.+)"?/);
-        if (match) filename = match[1];
-      }
+      // 2. Descarcam fisierul criptat
+      const encryptedResponse = await fileAPI.downloadEncrypted(attachment.id);
+      const encryptedData = encryptedResponse.data; // ArrayBuffer
       
-      const url = window.URL.createObjectURL(response.data);
+      // 3. Decriptam pe client
+      const decryptedData = await cryptoClient.decryptFile(
+        encryptedData,
+        encrypted_aes_key,
+        iv,
+        privateKey
+      );
+      
+      // 4. Cream blob si downloadam
+      const blob = new Blob([decryptedData], { type: file_mime_type || 'application/octet-stream' });
+      const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = filename;
+      a.download = file_name || attachment.file_name || 'file';
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       window.URL.revokeObjectURL(url);
     } catch (err) {
       console.error('Download error:', err);
-      alert('Eroare la descărcarea fișierului');
+      alert('Eroare la descărcarea fișierului: ' + (err.message || 'Verifică cheia privată'));
     } finally {
       setDownloadingFile(null);
     }
   };
 
-  // Handler pentru încărcarea imaginilor
+  // Handler pentru încărcarea imaginilor - CLIENT-SIDE DECRYPTION (E2E)
   const handleLoadImage = async (attachmentId) => {
     if (!privateKey) {
       throw new Error('Nu ai cheia privată');
     }
     
     try {
-      const response = await fileAPI.downloadAttachment(attachmentId, privateKey);
-      const dataUrl = URL.createObjectURL(response.data);
+      // 1. Obtinem metadatele (cheia AES criptata, IV)
+      const metaResponse = await fileAPI.getAttachmentMeta(attachmentId);
+      const { encrypted_aes_key, iv, file_mime_type } = metaResponse.data;
+      
+      // 2. Descarcam imaginea criptata
+      const encryptedResponse = await fileAPI.downloadEncrypted(attachmentId);
+      const encryptedData = encryptedResponse.data; // ArrayBuffer
+      
+      // 3. Decriptam pe client
+      const decryptedData = await cryptoClient.decryptFile(
+        encryptedData,
+        encrypted_aes_key,
+        iv,
+        privateKey
+      );
+      
+      // 4. Cream blob URL pentru afisare
+      const blob = new Blob([decryptedData], { type: file_mime_type || 'image/jpeg' });
+      const dataUrl = URL.createObjectURL(blob);
       setLoadedImages(prev => ({ ...prev, [attachmentId]: dataUrl }));
       return dataUrl;
     } catch (err) {

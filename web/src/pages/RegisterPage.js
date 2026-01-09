@@ -3,7 +3,7 @@
 // Creeaza cont nou si genereaza chei RSA
 
 import React, { useState, useContext } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { AuthContext } from '../App';
 import './AuthPages.css';
 
@@ -17,8 +17,7 @@ import './AuthPages.css';
  * 4. Cheia privata este salvata si local in browser
  */
 function RegisterPage() {
-  const { register } = useContext(AuthContext);
-  const navigate = useNavigate();
+  const { register, confirmRegistration } = useContext(AuthContext);
   
   // State pentru formular
   const [username, setUsername] = useState('');
@@ -265,7 +264,7 @@ function RegisterPage() {
               </button>
               <button 
                 className="btn btn-primary"
-                onClick={() => navigate('/chat')}
+                onClick={confirmRegistration}
               >
                 Continua catre chat
               </button>

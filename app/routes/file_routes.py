@@ -397,6 +397,104 @@ def get_image(attachment_id):
     })
 
 
+# ==================== ENDPOINTS PENTRU DECRIPTARE CLIENT-SIDE (E2E) ====================
+
+@file_bp.route('/encrypted/<int:attachment_id>', methods=['GET'])
+@login_required
+def get_encrypted_file(attachment_id):
+    """
+    Descarca fisierul criptat (fara decriptare).
+    Decriptarea se face pe client pentru end-to-end encryption.
+    
+    Returneaza fisierul criptat ca binary.
+    Clientul trebuie sa obtina cheia AES de la /meta/<attachment_id>
+    """
+    user_id = get_current_user_id()
+    
+    attachment = MessageAttachment.query.get(attachment_id)
+    if not attachment:
+        return jsonify({'error': 'Atasament negasit'}), 404
+    
+    message = Message.query.get(attachment.message_id)
+    if not message:
+        return jsonify({'error': 'Mesaj negasit'}), 404
+        
+    conversation = chat_service.get_conversation(message.conversation_id, user_id)
+    if not conversation:
+        return jsonify({'error': 'Acces interzis'}), 403
+    
+    # Verificam ca utilizatorul are acces la fisier
+    import json
+    try:
+        encrypted_keys = json.loads(attachment.encrypted_aes_keys)
+        if str(user_id) not in encrypted_keys:
+            return jsonify({'error': 'Nu ai acces la acest fisier'}), 403
+    except:
+        return jsonify({'error': 'Eroare la verificarea accesului'}), 500
+    
+    # Citim fisierul criptat
+    result = file_service.get_encrypted_file(attachment.file_path)
+    
+    if not result['success']:
+        return jsonify({'error': result['error']}), 404
+    
+    return send_file(
+        BytesIO(result['data']),
+        mimetype='application/octet-stream',
+        as_attachment=False
+    )
+
+
+@file_bp.route('/meta/<int:attachment_id>', methods=['GET'])
+@login_required
+def get_attachment_meta(attachment_id):
+    """
+    Obtine metadatele unui atasament necesare pentru decriptare client-side.
+    
+    Response:
+    {
+        "success": true,
+        "encrypted_aes_key": "base64...",  // Cheia AES criptata pentru utilizatorul curent
+        "iv": "base64...",
+        "file_name": "document.pdf",
+        "file_size": 102400,
+        "file_mime_type": "application/pdf"
+    }
+    """
+    user_id = get_current_user_id()
+    
+    attachment = MessageAttachment.query.get(attachment_id)
+    if not attachment:
+        return jsonify({'error': 'Atasament negasit'}), 404
+    
+    message = Message.query.get(attachment.message_id)
+    if not message:
+        return jsonify({'error': 'Mesaj negasit'}), 404
+        
+    conversation = chat_service.get_conversation(message.conversation_id, user_id)
+    if not conversation:
+        return jsonify({'error': 'Acces interzis'}), 403
+    
+    import json
+    try:
+        encrypted_keys = json.loads(attachment.encrypted_aes_keys)
+        encrypted_aes_key = encrypted_keys.get(str(user_id))
+    except:
+        encrypted_aes_key = None
+    
+    if not encrypted_aes_key:
+        return jsonify({'error': 'Nu ai acces la acest fisier'}), 403
+    
+    return jsonify({
+        'success': True,
+        'encrypted_aes_key': encrypted_aes_key,
+        'iv': attachment.iv,
+        'file_name': attachment.file_name,
+        'file_size': attachment.file_size,
+        'file_mime_type': attachment.file_mime_type
+    })
+
+
 @file_bp.route('/delete-temp/<temp_id>', methods=['DELETE'])
 @login_required
 def delete_temp_file(temp_id):
